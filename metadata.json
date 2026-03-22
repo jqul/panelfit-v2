@@ -1,0 +1,5 @@
+{
+  "name": "PanelFit",
+  "description": "Plataforma integral para entrenadores personales y seguimiento de clientes con análisis de progreso por IA.",
+  "requestFramePermissions": ["camera"]
+}

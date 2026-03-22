@@ -1,0 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "DM Serif Display", Georgia, serif;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-bg: #edeae2;
+  --color-bg-alt: #e4e1d8;
+  --color-card: #faf8f5;
+  --color-border: #d8d4ca;
+  --color-ink: #111110;
+  --color-accent: #6e5438;
+  --color-accent-alt: #a8886a;
+  --color-ok: #1a6038;
+  --color-warn: #b02a20;
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-ink font-sans antialiased;
+  }
+}
+
+.markdown-body h1 { @apply text-2xl font-serif mb-4 mt-6; }
+.markdown-body h2 { @apply text-xl font-serif mb-3 mt-5; }
+.markdown-body h3 { @apply text-lg font-serif mb-2 mt-4; }
+.markdown-body p { @apply mb-4 leading-relaxed; }
+.markdown-body ul { @apply list-disc pl-5 mb-4; }
+.markdown-body ol { @apply list-decimal pl-5 mb-4; }
+.markdown-body li { @apply mb-1; }
+.markdown-body strong { @apply font-semibold; }
+
