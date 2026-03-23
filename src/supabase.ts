@@ -24,7 +24,8 @@ console.log('🔑 Supabase Config:', {
   urlValid: supabaseUrl?.startsWith('https://'),
   hasKey: !!supabaseAnonKey,
   keyLength: supabaseAnonKey?.length || 0,
-  isNewKey: supabaseAnonKey?.startsWith('sb_')
+  isNewKey: supabaseAnonKey?.startsWith('sb_'),
+  keyPrefix: supabaseAnonKey ? supabaseAnonKey.substring(0, 15) + '...' : 'none'
 });
 
 export const supabase = createClient(safeUrl, safeKey);

@@ -224,8 +224,8 @@ export function SuperAdminDashboard({ userProfile }: { userProfile: UserProfile 
               <h2 className="text-lg font-serif font-bold">Crecimiento de Clientes</h2>
               <p className="text-[10px] text-muted uppercase tracking-widest font-bold">Últimos 6 meses</p>
             </div>
-            <div className="h-[250px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[250px] w-full" style={{ minHeight: '250px' }}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
@@ -309,7 +309,10 @@ export function SuperAdminDashboard({ userProfile }: { userProfile: UserProfile 
                             <span className="font-medium text-sm">{trainer.displayName}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-muted">{trainer.email}</td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-muted">{trainer.email}</div>
+                          <div className="text-[9px] font-mono text-muted/50 mt-1">{trainer.uid}</div>
+                        </td>
                         <td className="px-6 py-4">
                           {trainer.role === 'super_admin' ? (
                             <span className="text-[10px] uppercase tracking-widest font-bold text-accent">Super Admin</span>
