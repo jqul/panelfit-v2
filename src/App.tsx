@@ -156,18 +156,30 @@ export default function App() {
   }, []);
 
   if (loading) {
+    // Las nuevas claves de Supabase (sb_publishable) miden unos 46 caracteres.
+    // Las antiguas miden unos 160. Ponemos el límite en 40 para estar seguros.
+    const isKeyTooShort = (import.meta.env.VITE_SUPABASE_ANON_KEY?.length || 0) < 40;
+    
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center p-6">
         <div className="flex flex-col items-center gap-6 max-w-sm text-center">
           <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
           <div className="space-y-2">
             <p className="text-xs font-bold uppercase tracking-widest text-muted">Cargando PanelFit...</p>
+            {isKeyTooShort && (
+              <div className="p-3 bg-warn/10 border border-warn/20 rounded-lg mt-4">
+                <p className="text-[10px] text-warn font-bold uppercase">⚠️ Clave no detectada</p>
+                <p className="text-[10px] text-muted mt-1">
+                  No detectamos una clave válida de Supabase en Vercel. 
+                  Asegúrate de haber configurado VITE_SUPABASE_ANON_KEY.
+                </p>
+              </div>
+            )}
             <p className="text-[10px] text-muted/50 leading-relaxed">
               Si esto tarda demasiado, revisa la conexión con Supabase en Vercel.
             </p>
           </div>
           
-          {/* Botón de emergencia que aparece tras el timeout */}
           <button 
             onClick={() => {
               setLoading(false);
