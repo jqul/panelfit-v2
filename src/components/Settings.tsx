@@ -1,20 +1,62 @@
 import { useState } from 'react';
-import { User, Mail, Shield, Bell, LogOut, ChevronRight } from 'lucide-react';
+import { User, Mail, Shield, Bell, LogOut, ChevronRight, Edit2, Save, X } from 'lucide-react';
 import { Button } from './Button';
 import { supabase } from '../supabase';
 import { UserProfile } from '../types';
 
 export function Settings({ userProfile }: { userProfile: UserProfile }) {
   const [notifications, setNotifications] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [displayName, setDisplayName] = useState(userProfile.displayName);
+  const [loading, setLoading] = useState(false);
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('entrenadores')
+        .update({ name: displayName.split(' ')[0], surname: displayName.split(' ').slice(1).join(' ') })
+        .eq('id', userProfile.uid);
+      
+      if (error) throw error;
+      setIsEditing(false);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="max-w-2xl mx-auto space-y-8 py-8">
-      <div className="flex items-center gap-6 p-6 bg-card border border-border rounded-2xl">
+      <div className="flex items-center gap-6 p-6 bg-card border border-border rounded-2xl shadow-sm">
         <div className="w-20 h-20 rounded-full bg-accent/10 flex items-center justify-center text-accent text-3xl font-serif font-bold">
-          {userProfile.displayName[0]}
+          {displayName[0]}
         </div>
-        <div>
-          <h2 className="text-2xl font-serif font-bold">{userProfile.displayName}</h2>
+        <div className="flex-1">
+          {isEditing ? (
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className="flex-1 bg-bg border border-border rounded-lg px-3 py-1 text-xl font-serif font-bold outline-none focus:ring-2 focus:ring-accent/20"
+              />
+              <Button size="sm" onClick={handleSave} disabled={loading}>
+                <Save className="w-4 h-4" />
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-serif font-bold">{displayName}</h2>
+              <button onClick={() => setIsEditing(true)} className="p-2 hover:bg-bg rounded-lg text-muted hover:text-accent transition-colors">
+                <Edit2 className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <p className="text-muted flex items-center gap-2 mt-1">
             <Mail className="w-4 h-4" />
             {userProfile.email}

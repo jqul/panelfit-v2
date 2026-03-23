@@ -21,24 +21,37 @@ export function Auth({ onAuthSuccess }: { onAuthSuccess: (user: any) => void }) 
           email,
           password,
         });
-        if (authError) throw authError;
+        if (authError) {
+          if (authError.message.includes('Invalid login credentials')) {
+            throw new Error('Credenciales incorrectas. Si eres el administrador, asegúrate de usar tu correo y contraseña correctos.');
+          }
+          throw authError;
+        }
         onAuthSuccess(data.user);
       } else {
         const { data, error: authError } = await supabase.auth.signUp({
           email,
           password,
         });
-        if (authError) throw authError;
+        if (authError) {
+          if (authError.message.includes('User already registered')) {
+            throw new Error('Este correo ya está registrado. Intenta iniciar sesión.');
+          }
+          throw authError;
+        }
         
         if (data.user) {
+          const isSuperAdmin = email === 'javier.quinones.lopez@gmail.com';
+          const role = isSuperAdmin ? 'super_admin' : 'trainer';
           const { error: profileError } = await supabase
             .from('entrenadores')
-            .insert([
+            .upsert([
               {
                 uid: data.user.id,
                 email,
-                displayName: name,
-                role: 'trainer',
+                displayName: name || email.split('@')[0],
+                role: role,
+                approved: isSuperAdmin,
                 createdAt: Date.now(),
               },
             ]);
@@ -63,6 +76,11 @@ export function Auth({ onAuthSuccess }: { onAuthSuccess: (user: any) => void }) 
           <p className="mt-2 text-sm text-muted">
             {isLogin ? 'Inicia sesión en tu cuenta' : 'Crea tu cuenta de entrenador'}
           </p>
+          {email === 'javier.quinones.lopez@gmail.com' && (
+            <div className="mt-4 p-3 bg-accent/10 border border-accent/20 rounded-lg text-[10px] uppercase tracking-widest font-bold text-accent">
+              Acceso Super Admin Detectado
+            </div>
+          )}
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>

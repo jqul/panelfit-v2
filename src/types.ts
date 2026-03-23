@@ -2,7 +2,8 @@ export interface UserProfile {
   uid: string;
   email: string;
   displayName: string;
-  role: 'trainer' | 'client';
+  role: 'super_admin' | 'trainer' | 'client';
+  approved?: boolean;
   trainerId?: string; // For clients
   createdAt: number;
 }
@@ -73,6 +74,43 @@ export interface ExerciseLog {
 
 export interface TrainingLogs {
   [key: string]: ExerciseLog; // key format: ex_w{weekIndex}_d{dayIndex}_r{exerciseIndex}
+}
+
+export interface WeightLog {
+  id: string;
+  clientId: string;
+  weight: number;
+  fatPercentage?: number;
+  date: string;
+}
+
+export interface Habit {
+  id: string;
+  clientId: string;
+  text: string;
+  sub: string;
+  order: number;
+}
+
+export interface HabitLog {
+  clientId: string;
+  date: string;
+  completedHabitIds: string[];
+}
+
+export interface DietPlan {
+  clientId: string;
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  meals: {
+    time: string;
+    name: string;
+    kcal: number;
+    items: string[];
+  }[];
+  advice?: string;
 }
 
 export interface ProgressPhoto {

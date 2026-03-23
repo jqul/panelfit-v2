@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Plus, Users, BarChart3, ClipboardList, LogOut, Search, UserPlus, Settings as SettingsIcon, Dumbbell } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, Users, BarChart3, ClipboardList, LogOut, Search, UserPlus, Settings as SettingsIcon, Dumbbell, LayoutDashboard, TrendingUp, Calendar, ArrowRight } from 'lucide-react';
 import { supabase } from '../supabase';
 import { Button } from './Button';
 import { ClientData, UserProfile } from '../types';
@@ -7,18 +7,52 @@ import { Settings } from './Settings';
 import { ExerciseLibrary } from './ExerciseLibrary';
 import { ClientPanel } from './ClientPanel';
 import { TrainingTemplates } from './TrainingTemplates';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
-export function TrainerDashboard({ userProfile }: { userProfile: UserProfile }) {
+export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserProfile, onLogout: () => void }) {
   const [clients, setClients] = useState<ClientData[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newClient, setNewClient] = useState({ name: '', surname: '' });
   const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
-  const [activeTab, setActiveTab] = useState<'clients' | 'exercises' | 'templates' | 'settings'>('clients');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'exercises' | 'templates' | 'settings'>('dashboard');
 
   useEffect(() => {
     const fetchClients = async () => {
+      if (userProfile.uid === 'demo-trainer') {
+        setClients([
+          {
+            id: 'demo-client-1',
+            name: 'Juan',
+            surname: 'Pérez',
+            weight: 82,
+            fatPercentage: 18,
+            muscleMass: 35,
+            totalLifted: 450,
+            planDescription: 'Hipertrofia Avanzada',
+            trainerId: 'demo-trainer',
+            token: 'demo-token-1',
+            createdAt: Date.now() - 10000000
+          },
+          {
+            id: 'demo-client-2',
+            name: 'María',
+            surname: 'García',
+            weight: 65,
+            fatPercentage: 22,
+            muscleMass: 28,
+            totalLifted: 210,
+            planDescription: 'Pérdida de Grasa',
+            trainerId: 'demo-trainer',
+            token: 'demo-token-2',
+            createdAt: Date.now() - 5000000
+          }
+        ]);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('clientes')
         .select('*')
@@ -32,23 +66,25 @@ export function TrainerDashboard({ userProfile }: { userProfile: UserProfile }) 
 
     fetchClients();
 
-    // Real-time subscription
-    const channel = supabase
-      .channel('public:clientes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes', filter: `trainerId=eq.${userProfile.uid}` }, payload => {
-        if (payload.eventType === 'INSERT') {
-          setClients(prev => [...prev, payload.new as ClientData]);
-        } else if (payload.eventType === 'UPDATE') {
-          setClients(prev => prev.map(c => c.id === payload.new.id ? payload.new as ClientData : c));
-        } else if (payload.eventType === 'DELETE') {
-          setClients(prev => prev.filter(c => c.id === payload.old.id));
-        }
-      })
-      .subscribe();
+    if (userProfile.uid !== 'demo-trainer') {
+      // Real-time subscription
+      const channel = supabase
+        .channel('public:clientes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes', filter: `trainerId=eq.${userProfile.uid}` }, payload => {
+          if (payload.eventType === 'INSERT') {
+            setClients(prev => [...prev, payload.new as ClientData]);
+          } else if (payload.eventType === 'UPDATE') {
+            setClients(prev => prev.map(c => c.id === payload.new.id ? payload.new as ClientData : c));
+          } else if (payload.eventType === 'DELETE') {
+            setClients(prev => prev.filter(c => c.id === payload.old.id));
+          }
+        })
+        .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
   }, [userProfile.uid]);
 
   if (selectedClient) {
@@ -63,6 +99,27 @@ export function TrainerDashboard({ userProfile }: { userProfile: UserProfile }) 
 
   const handleAddClient = async () => {
     if (!newClient.name) return;
+
+    if (userProfile.uid === 'demo-trainer') {
+      const demoClient: ClientData = {
+        id: `demo-client-${Date.now()}`,
+        name: newClient.name,
+        surname: newClient.surname,
+        weight: 0,
+        fatPercentage: 0,
+        muscleMass: 0,
+        totalLifted: 0,
+        planDescription: 'Nuevo plan',
+        trainerId: userProfile.uid,
+        token: Math.random().toString(36).substring(2, 15),
+        createdAt: Date.now(),
+      };
+      setClients(prev => [...prev, demoClient]);
+      setShowAddModal(false);
+      setNewClient({ name: '', surname: '' });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('clientes')
@@ -93,6 +150,33 @@ export function TrainerDashboard({ userProfile }: { userProfile: UserProfile }) 
     `${c.name} ${c.surname}`.toLowerCase().includes(search.toLowerCase())
   );
 
+  const chartData = useMemo(() => {
+    const last6Months = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      return {
+        month: d.toLocaleString('es-ES', { month: 'short' }),
+        count: 0
+      };
+    }).reverse();
+
+    clients.forEach(c => {
+      const cDate = new Date(c.createdAt);
+      const monthStr = cDate.toLocaleString('es-ES', { month: 'short' });
+      const monthData = last6Months.find(m => m.month === monthStr);
+      if (monthData) monthData.count++;
+    });
+
+    // Cumulative count
+    let total = 0;
+    return last6Months.map(m => {
+      total += m.count;
+      return { ...m, total };
+    });
+  }, [clients]);
+
+  const recentClients = [...clients].sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
+
   return (
     <div className="flex flex-col lg:flex-row h-screen overflow-hidden">
       {/* Sidebar */}
@@ -116,6 +200,15 @@ export function TrainerDashboard({ userProfile }: { userProfile: UserProfile }) 
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
+          <button 
+            onClick={() => setActiveTab('dashboard')}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'dashboard' ? 'bg-ink text-white' : 'text-muted hover:bg-bg-alt hover:text-ink'
+            }`}
+          >
+            <LayoutDashboard className="w-4 h-4" />
+            Dashboard
+          </button>
           <button 
             onClick={() => setActiveTab('clients')}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -160,7 +253,7 @@ export function TrainerDashboard({ userProfile }: { userProfile: UserProfile }) 
         </nav>
 
         <div className="p-4 border-t border-border space-y-2">
-          <Button variant="outline" className="w-full justify-start gap-3" onClick={() => supabase.auth.signOut()}>
+          <Button variant="outline" className="w-full justify-start gap-3" onClick={onLogout}>
             <LogOut className="w-4 h-4" />
             Cerrar sesión
           </Button>
@@ -174,7 +267,139 @@ export function TrainerDashboard({ userProfile }: { userProfile: UserProfile }) 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto bg-bg p-8">
         <div className="max-w-6xl mx-auto">
-          {activeTab === 'clients' ? (
+          {activeTab === 'dashboard' ? (
+            <div className="space-y-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-3xl font-serif font-bold">Resumen</h2>
+                  <p className="text-muted text-sm mt-1">Bienvenido de nuevo, {userProfile.displayName}</p>
+                </div>
+                <Button className="gap-2" onClick={() => setShowAddModal(true)}>
+                  <UserPlus className="w-4 h-4" />
+                  Nuevo Cliente
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-card border border-border p-6 rounded-2xl shadow-sm">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-3 bg-accent/10 text-accent rounded-xl">
+                      <Users className="w-6 h-6" />
+                    </div>
+                    <span className="text-xs font-bold uppercase tracking-widest text-muted">Total Clientes</span>
+                  </div>
+                  <p className="text-4xl font-serif font-bold">{clients.length}</p>
+                </div>
+                <div className="bg-card border border-border p-6 rounded-2xl shadow-sm">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-3 bg-ok/10 text-ok rounded-xl">
+                      <TrendingUp className="w-6 h-6" />
+                    </div>
+                    <span className="text-xs font-bold uppercase tracking-widest text-muted">Crecimiento</span>
+                  </div>
+                  <p className="text-4xl font-serif font-bold">+{chartData[chartData.length - 1]?.count || 0}</p>
+                  <p className="text-[10px] text-muted uppercase tracking-widest font-bold mt-1">Este mes</p>
+                </div>
+                <div className="bg-card border border-border p-6 rounded-2xl shadow-sm">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-3 bg-warn/10 text-warn rounded-xl">
+                      <Calendar className="w-6 h-6" />
+                    </div>
+                    <span className="text-xs font-bold uppercase tracking-widest text-muted">Próxima Sesión</span>
+                  </div>
+                  <p className="text-2xl font-serif font-bold">Hoy</p>
+                  <p className="text-[10px] text-muted uppercase tracking-widest font-bold mt-1">3 entrenos programados</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 bg-card border border-border p-6 rounded-2xl shadow-sm">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-serif font-bold">Crecimiento de Alumnos</h3>
+                    <p className="text-[10px] text-muted uppercase tracking-widest font-bold">Histórico</p>
+                  </div>
+                  <div className="h-[250px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartData}>
+                        <defs>
+                          <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#FF6321" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#FF6321" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2A2A2A" />
+                        <XAxis 
+                          dataKey="month" 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fill: '#8E9299', fontSize: 10 }}
+                          dy={10}
+                        />
+                        <YAxis 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fill: '#8E9299', fontSize: 10 }}
+                        />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: '8px' }}
+                          itemStyle={{ color: '#FF6321', fontSize: '12px' }}
+                          labelStyle={{ color: '#FFFFFF', fontSize: '10px', marginBottom: '4px' }}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="total" 
+                          stroke="#FF6321" 
+                          strokeWidth={2}
+                          fillOpacity={1} 
+                          fill="url(#colorTotal)" 
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+                  <div className="p-6 border-b border-border">
+                    <h3 className="text-lg font-serif font-bold">Altas Recientes</h3>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {recentClients.length > 0 ? (
+                      recentClients.map(c => (
+                        <div 
+                          key={c.id} 
+                          className="p-4 hover:bg-bg-alt transition-colors cursor-pointer flex items-center justify-between group"
+                          onClick={() => setSelectedClient(c)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-accent/10 text-accent flex items-center justify-center font-bold text-xs">
+                              {c.name[0]}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold">{c.name} {c.surname}</p>
+                              <p className="text-[10px] text-muted">{new Date(c.createdAt).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                          <ArrowRight className="w-4 h-4 text-muted opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-8 text-center text-muted italic text-sm">
+                        No hay clientes recientes
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4 bg-bg-alt/50 border-t border-border">
+                    <button 
+                      onClick={() => setActiveTab('clients')}
+                      className="text-[10px] uppercase tracking-widest font-bold text-accent hover:underline w-full text-center"
+                    >
+                      Ver todos los clientes
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : activeTab === 'clients' ? (
             <>
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>

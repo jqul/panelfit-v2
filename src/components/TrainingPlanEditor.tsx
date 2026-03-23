@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Video, Star, ChevronDown, ChevronUp, Save } from 'lucide-react';
+import { Plus, Trash2, Video, Star, ChevronDown, ChevronUp, Save, Sparkles } from 'lucide-react';
 import { Button } from './Button';
 import { TrainingPlan, DayPlan, Exercise, WeekPlan } from '../types';
 import { DEFAULT_EXERCISES, TRAINING_TYPES } from '../constants';
@@ -13,6 +13,38 @@ export function TrainingPlanEditor({
 }) {
   const [editedPlan, setEditedPlan] = useState<TrainingPlan>({ ...plan });
   const [activeWeekIdx, setActiveWeekIdx] = useState(0);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const generateWithAI = async () => {
+    setIsGenerating(true);
+    try {
+      const response = await fetch('/api/analyze-photo', { // Reusing the same endpoint for prompt-only too or creating a new one
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          prompt: `Genera un plan de entrenamiento de 4 semanas para un cliente con objetivo ${editedPlan.type}. 
+          El plan debe estar en formato JSON y seguir esta estructura: 
+          { "weeks": [ { "label": "Semana 1", "rpe": "@7", "days": [ { "title": "Día 1", "focus": "Fuerza", "exercises": [ { "name": "...", "sets": "...", "weight": "...", "comment": "..." } ] } ] } ] }
+          Usa ejercicios de esta lista si es posible: ${DEFAULT_EXERCISES.join(', ')}`
+        })
+      });
+      
+      const data = await response.json();
+      if (data.analysis) {
+        // The server returns { analysis: "..." } which is the text response from Gemini
+        // We need to parse the JSON inside the text
+        const jsonMatch = data.analysis.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const generated = JSON.parse(jsonMatch[0]);
+          setEditedPlan({ ...editedPlan, weeks: generated.weeks });
+        }
+      }
+    } catch (error) {
+      console.error('Error generating plan:', error);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const addWeek = () => {
     const newWeek: WeekPlan = {
@@ -104,26 +136,39 @@ export function TrainingPlanEditor({
         </div>
       </div>
 
-      <div className="flex items-center gap-4 border-b border-border pb-4 overflow-x-auto scrollbar-hide">
-        {editedPlan.weeks.map((w, i) => (
-          <button
-            key={i}
-            onClick={() => setActiveWeekIdx(i)}
-            className={`px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
-              activeWeekIdx === i 
-                ? 'bg-ink text-white' 
-                : 'bg-card border border-border text-muted hover:border-muted'
-            }`}
+      <div className="flex items-center justify-between border-b border-border pb-4 overflow-x-auto scrollbar-hide">
+        <div className="flex items-center gap-4">
+          {editedPlan.weeks.map((w, i) => (
+            <button
+              key={i}
+              onClick={() => setActiveWeekIdx(i)}
+              className={`px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
+                activeWeekIdx === i 
+                  ? 'bg-ink text-white' 
+                  : 'bg-card border border-border text-muted hover:border-muted'
+              }`}
+            >
+              {w.label}
+            </button>
+          ))}
+          <button 
+            onClick={addWeek}
+            className="p-2 rounded-full border border-dashed border-border text-muted hover:border-accent hover:text-accent transition-all"
           >
-            {w.label}
+            <Plus className="w-4 h-4" />
           </button>
-        ))}
-        <button 
-          onClick={addWeek}
-          className="p-2 rounded-full border border-dashed border-border text-muted hover:border-accent hover:text-accent transition-all"
+        </div>
+
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="gap-2 text-accent border-accent/20 hover:bg-accent/5"
+          onClick={generateWithAI}
+          disabled={isGenerating}
         >
-          <Plus className="w-4 h-4" />
-        </button>
+          <Sparkles className={`w-4 h-4 ${isGenerating ? 'animate-pulse' : ''}`} />
+          {isGenerating ? 'Generando...' : 'Generar con IA'}
+        </Button>
       </div>
 
       {editedPlan.weeks[activeWeekIdx] && (
@@ -168,7 +213,7 @@ export function TrainingPlanEditor({
                 {day.exercises.map((ex, exIdx) => (
                   <div key={exIdx} className="bg-bg rounded-lg p-4 border border-border/50 group">
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                      <div className="lg:col-span-4">
+                      <div className="lg:col-span-4 relative">
                         <label className="block text-[9px] font-bold uppercase text-muted mb-1">Ejercicio</label>
                         <input 
                           className="w-full bg-card border border-border rounded px-2 py-1.5 text-sm font-semibold" 
@@ -178,7 +223,11 @@ export function TrainingPlanEditor({
                             newWeeks[activeWeekIdx].days[dayIdx].exercises[exIdx].name = e.target.value;
                             setEditedPlan({ ...editedPlan, weeks: newWeeks });
                           }}
+                          list={`exercises-${activeWeekIdx}-${dayIdx}-${exIdx}`}
                         />
+                        <datalist id={`exercises-${activeWeekIdx}-${dayIdx}-${exIdx}`}>
+                          {DEFAULT_EXERCISES.map(e => <option key={e} value={e} />)}
+                        </datalist>
                       </div>
                       <div className="lg:col-span-2">
                         <label className="block text-[9px] font-bold uppercase text-muted mb-1">Series</label>

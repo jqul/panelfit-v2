@@ -10,7 +10,8 @@ import {
   Clock,
   Trophy,
   History,
-  Settings
+  Settings,
+  LineChart
 } from 'lucide-react';
 import { supabase } from '../supabase';
 import { Button } from './Button';
@@ -24,6 +25,7 @@ import { DietView } from './DietView';
 import { HabitsView } from './HabitsView';
 import { TrainingHistory } from './TrainingHistory';
 import { TrainingSession } from './TrainingSession';
+import { MetricsView } from './MetricsView';
 
 export function ClientPanel({ 
   client, 
@@ -42,29 +44,80 @@ export function ClientPanel({
 
   useEffect(() => {
     const fetchPlanAndLogs = async () => {
-      const [{ data: planData }, { data: logsData }] = await Promise.all([
-        supabase.from('planes').select('*').eq('clientId', client.id).single(),
-        supabase.from('registros').select('*').eq('clientId', client.id).single()
-      ]);
-
-      if (planData) {
-        setPlan(planData as TrainingPlan);
-      } else if (isTrainer) {
-        const emptyPlan: TrainingPlan = {
+      if (client.id.startsWith('demo-client-')) {
+        const mockPlan: TrainingPlan = {
           clientId: client.id,
-          weeks: [],
+          weeks: [
+            {
+              label: 'Semana 1 - Carga',
+              rpe: '@8',
+              isCurrent: true,
+              days: [
+                {
+                  title: 'Empuje (Pecho/Hombro/Tríceps)',
+                  focus: 'Hipertrofia',
+                  exercises: [
+                    { name: 'Press de Banca con Barra', sets: '4x8-10', weight: 'RPE 8', isMain: true, comment: 'Controlar excéntrica' },
+                    { name: 'Press Militar con Mancuernas', sets: '3x10-12', weight: 'RPE 8', isMain: false, comment: 'Sin bloqueo articular' },
+                    { name: 'Aperturas en Polea', sets: '3x15', weight: 'RPE 9', isMain: false, comment: 'Máximo estiramiento' }
+                  ]
+                },
+                {
+                  title: 'Tracción (Espalda/Bíceps)',
+                  focus: 'Fuerza',
+                  exercises: [
+                    { name: 'Dominadas Lastradas', sets: '4x6-8', weight: 'RPE 8', isMain: true, comment: 'Pecho a la barra' },
+                    { name: 'Remo con Barra', sets: '3x10', weight: 'RPE 8', isMain: false, comment: 'Tronco paralelo al suelo' }
+                  ]
+                }
+              ]
+            }
+          ],
           type: 'hipertrofia',
           restMain: 180,
           restAcc: 90,
           restWarn: 30
         };
-        setPlan(emptyPlan);
+        setPlan(mockPlan);
+        setLogs({});
+        setLoading(false);
+        return;
       }
 
-      if (logsData) {
-        setLogs(logsData as TrainingLogs);
+      try {
+        setLoading(true);
+        const [{ data: planData, error: planError }, { data: logsData, error: logsError }] = await Promise.all([
+          supabase.from('planes').select('*').eq('clientId', client.id).maybeSingle(),
+          supabase.from('registros').select('*').eq('clientId', client.id).maybeSingle()
+        ]);
+
+        if (planError) console.error('Error fetching plan:', planError);
+        if (logsError) console.error('Error fetching logs:', logsError);
+
+        if (planData) {
+          setPlan(planData.plan as TrainingPlan);
+        } else if (isTrainer) {
+          const emptyPlan: TrainingPlan = {
+            clientId: client.id,
+            weeks: [],
+            type: 'hipertrofia',
+            restMain: 180,
+            restAcc: 90,
+            restWarn: 30
+          };
+          setPlan(emptyPlan);
+        }
+
+        if (logsData) {
+          setLogs(logsData.logs as TrainingLogs);
+        } else {
+          setLogs({});
+        }
+      } catch (error) {
+        console.error('Error in fetchPlanAndLogs:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchPlanAndLogs();
@@ -91,6 +144,10 @@ export function ClientPanel({
   }, [client.id, isTrainer]);
 
   const handleSavePlan = async (newPlan: TrainingPlan) => {
+    if (client.id.startsWith('demo-client-')) {
+      setPlan(newPlan);
+      return;
+    }
     try {
       const { error } = await supabase
         .from('planes')
@@ -104,12 +161,40 @@ export function ClientPanel({
   };
 
   const handleLogUpdate = async (exerciseName: string, setIndex: number, field: 'weight' | 'reps', value: string) => {
-    // Logic to update logs in Firestore
+    const newLogs = { ...logs };
+    // Simple logic to ensure the structure exists
+    if (!newLogs[exerciseName]) {
+      newLogs[exerciseName] = { sets: {}, done: false };
+    }
+    if (!newLogs[exerciseName].sets[setIndex]) {
+      newLogs[exerciseName].sets[setIndex] = { weight: '', reps: '' };
+    }
+    newLogs[exerciseName].sets[setIndex][field] = value;
+    
+    setLogs(newLogs);
+
+    if (client.id.startsWith('demo-client-')) {
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('registros')
+        .upsert({ 
+          clientId: client.id, 
+          logs: newLogs,
+          updatedAt: new Date().toISOString()
+        });
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error saving logs:', error);
+    }
   };
 
   const tabs = [
     { id: 'dashboard', label: 'Hoy', icon: Home },
     { id: 'training', label: 'Entreno', icon: Dumbbell },
+    { id: 'metrics', label: 'Métricas', icon: LineChart },
     { id: 'history', label: 'Historial', icon: History },
     { id: 'diet', label: 'Dieta', icon: Utensils },
     { id: 'habits', label: 'Hábitos', icon: CheckSquare },
@@ -135,9 +220,9 @@ export function ClientPanel({
   }
 
   return (
-    <div className="h-screen flex flex-col bg-bg">
+    <div className="min-h-screen flex flex-col bg-bg pb-20 md:pb-0">
       {/* Header */}
-      <header className="flex-none bg-card border-b border-border px-6 py-4 z-30">
+      <header className="flex-none bg-card border-b border-border px-6 py-4 z-30 sticky top-0">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             {isTrainer && (
@@ -172,14 +257,17 @@ export function ClientPanel({
         </div>
       </header>
 
-      {/* Navigation */}
-      <nav className="flex-none bg-card border-b border-border overflow-x-auto scrollbar-hide z-20">
+      {/* Navigation - Desktop */}
+      <nav className="hidden md:block flex-none bg-card border-b border-border z-20">
         <div className="max-w-5xl mx-auto flex px-4">
           {tabs.map(tab => (
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                console.log('Switching to tab:', tab.id);
+                setActiveTab(tab.id);
+              }}
               className={`flex items-center gap-2 px-6 py-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${
                 activeTab === tab.id 
                   ? 'border-ink text-ink' 
@@ -194,7 +282,7 @@ export function ClientPanel({
       </nav>
 
       {/* Content */}
-      <main className="flex-1 p-6 overflow-y-auto">
+      <main className="flex-1 p-4 md:p-6">
         <div className="max-w-5xl mx-auto">
           {activeTab === 'dashboard' && (
             <ClientDashboard 
@@ -204,14 +292,23 @@ export function ClientPanel({
             />
           )}
           {activeTab === 'training' && (
-            <TrainingPlanView 
-              plan={plan} 
-              onStartSession={(day) => setActiveSession(day)}
-            />
+            plan ? (
+              <TrainingPlanView 
+                plan={plan} 
+                onStartSession={(day) => setActiveSession(day)}
+              />
+            ) : (
+              <div className="text-center py-20 bg-card border border-border rounded-2xl">
+                <Dumbbell className="w-12 h-12 text-muted mx-auto mb-4 opacity-20" />
+                <h3 className="text-xl font-serif font-bold">No hay plan asignado</h3>
+                <p className="text-muted mt-2">Tu entrenador aún no ha publicado tu plan de entrenamiento.</p>
+              </div>
+            )
           )}
           {activeTab === 'history' && <TrainingHistory logs={logs} />}
-          {activeTab === 'diet' && <DietView />}
-          {activeTab === 'habits' && <HabitsView />}
+          {activeTab === 'metrics' && <MetricsView client={client} isTrainer={isTrainer} />}
+          {activeTab === 'diet' && <DietView clientId={client.id} isTrainer={isTrainer} />}
+          {activeTab === 'habits' && <HabitsView clientId={client.id} isTrainer={isTrainer} />}
           {activeTab === 'progress' && <ProgressPhotos clientId={client.id} />}
           {activeTab === 'editor' && plan && (
             <TrainingPlanEditor plan={plan} onSave={handleSavePlan} />
@@ -219,6 +316,28 @@ export function ClientPanel({
           {activeTab === 'settings' && <ClientSettings client={client} />}
         </div>
       </main>
+
+      {/* Navigation - Mobile Bottom Bar */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border px-2 py-3 z-40 flex items-center justify-between gap-1">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => {
+              console.log('Switching to tab (mobile):', tab.id);
+              setActiveTab(tab.id);
+            }}
+            className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-xl transition-all ${
+              activeTab === tab.id 
+                ? 'text-accent bg-accent/5' 
+                : 'text-muted hover:text-ink'
+            }`}
+          >
+            <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? 'scale-110' : ''} transition-transform`} />
+            <span className="text-[8px] font-bold uppercase tracking-tighter">{tab.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
