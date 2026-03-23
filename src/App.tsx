@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Clock } from 'lucide-react';
 import { supabase } from './supabase';
 import { Auth } from './components/Auth';
 import { TrainerDashboard } from './components/TrainerDashboard';
@@ -63,7 +64,16 @@ export default function App() {
     const checkUser = async () => {
       console.log('🔍 PanelFit: Comprobando sesión de usuario...');
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        // Timeout para getSession para evitar cuelgues eternos
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('TIMEOUT_GET_SESSION')), 4000)
+        );
+
+        const { data: { session }, error: sessionError } = await Promise.race([
+          sessionPromise,
+          timeoutPromise
+        ]) as any;
         
         if (sessionError) {
           console.error('🔥 PanelFit: Error al obtener sesión:', sessionError);
@@ -106,8 +116,12 @@ export default function App() {
             setProfile(updatedProfile);
           }
         }
-      } catch (error) {
-        console.error('Error checking user session:', error);
+      } catch (error: any) {
+        if (error.message === 'TIMEOUT_GET_SESSION') {
+          console.error('⌛ PanelFit: Supabase getSession timeout.');
+        } else {
+          console.error('Error checking user session:', error);
+        }
       } finally {
         setLoading(false);
         clearTimeout(timeout);
@@ -271,22 +285,35 @@ export default function App() {
         <SuperAdminDashboard userProfile={profile} />
       ) : profile.role === 'trainer' && !profile.approved ? (
         <div className="min-h-screen bg-bg flex items-center justify-center p-6 text-center">
-          <div className="max-w-md space-y-6">
-            <div className="w-16 h-16 bg-warn/10 text-warn rounded-full flex items-center justify-center mx-auto">
-              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+          <div className="max-w-md space-y-6 bg-card p-8 rounded-2xl border border-border shadow-sm">
+            <div className="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Clock className="w-8 h-8 text-accent animate-pulse" />
             </div>
-            <h1 className="text-3xl font-serif font-bold">Registro Pendiente</h1>
-            <p className="text-muted leading-relaxed">
-              Tu cuenta ha sido creada correctamente, pero debe ser aprobada por un administrador antes de que puedas acceder al panel.
+            <h2 className="text-2xl font-serif font-bold">Registro Pendiente</h2>
+            <p className="text-muted text-sm leading-relaxed">
+              Tu cuenta ha sido creada con éxito, pero debe ser aprobada por un administrador antes de que puedas acceder al panel.
             </p>
-            <div className="pt-4">
+            
+            <div className="p-4 bg-bg rounded-lg border border-border text-left space-y-2">
+              <p className="text-[10px] text-muted uppercase tracking-widest font-bold">Tu ID de Usuario (Cópialo):</p>
+              <code className="block text-xs font-mono bg-card p-2 rounded border border-border break-all select-all">
+                {profile.uid}
+              </code>
+              <p className="text-[9px] text-muted italic">Envía este ID a Javier para que apruebe tu cuenta.</p>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-4">
+              <button 
+                onClick={() => window.location.reload()}
+                className="w-full py-3 bg-ink text-white rounded-full text-xs font-bold uppercase tracking-widest hover:opacity-90 transition-opacity"
+              >
+                Comprobar estado
+              </button>
               <button 
                 onClick={() => supabase.auth.signOut()}
-                className="text-accent font-bold hover:underline"
+                className="w-full py-3 text-muted hover:text-ink text-xs font-bold uppercase tracking-widest transition-colors"
               >
-                Cerrar Sesión
+                Cerrar sesión
               </button>
             </div>
           </div>
