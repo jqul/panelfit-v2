@@ -16,6 +16,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [showApp, setShowApp] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
+  const [connectionError, setConnectionError] = useState<'none' | 'timeout' | 'error'>('none');
+  const [showDebug, setShowDebug] = useState(false);
 
   const demoProfile: UserProfile = {
     uid: 'demo-trainer',
@@ -159,8 +161,6 @@ export default function App() {
 
     return () => subscription.unsubscribe();
   }, []);
-
-  const [showDebug, setShowDebug] = useState(false);
 
   if (loading || connectionError !== 'none') {
     const isKeyTooShort = (import.meta.env.VITE_SUPABASE_ANON_KEY?.length || 0) < 40;
