@@ -11,4 +11,8 @@ if (supabaseUrl && !supabaseUrl.startsWith('https://')) {
   console.error('Supabase URL must start with https://. Check for extra quotes or spaces.');
 }
 
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
+// Ensure we don't pass empty strings to createClient as it might throw
+const safeUrl = supabaseUrl && supabaseUrl.startsWith('https') ? supabaseUrl : 'https://placeholder.supabase.co';
+const safeKey = supabaseAnonKey || 'placeholder';
+
+export const supabase = createClient(safeUrl, safeKey);
