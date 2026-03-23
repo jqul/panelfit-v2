@@ -64,7 +64,6 @@ export default function App() {
     const checkUser = async () => {
       console.log('🔍 PanelFit: Comprobando sesión de usuario...');
       try {
-        // Timeout para getSession para evitar cuelgues eternos
         const sessionPromise = supabase.auth.getSession();
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('TIMEOUT_GET_SESSION')), 4000)
@@ -75,28 +74,20 @@ export default function App() {
           timeoutPromise
         ]) as any;
         
-        if (sessionError) {
-          console.error('🔥 PanelFit: Error al obtener sesión:', sessionError);
-          setLoading(false);
-          return;
-        }
+        if (sessionError) throw sessionError;
 
         if (session?.user) {
           console.log('👤 PanelFit: Usuario logueado:', session.user.email);
           setUser(session.user);
-          const { data: profileData, error: profileError } = await supabase
+          const { data: profileData } = await supabase
             .from('entrenadores')
             .select('*')
             .eq('uid', session.user.id)
             .maybeSingle();
           
-          if (profileError) {
-            console.error('Profile fetch error:', profileError);
-          }
-
           let updatedProfile = profileData as UserProfile;
           
-          // Auto-fix for Super Admin
+          // Auto-fix for Super Admin (Javier)
           if (session.user.email === 'javier.quinones.lopez@gmail.com') {
             if (!updatedProfile || updatedProfile.role !== 'super_admin' || !updatedProfile.approved) {
               const newProfile = {
@@ -112,15 +103,15 @@ export default function App() {
             }
           }
           
-          if (updatedProfile) {
-            setProfile(updatedProfile);
-          }
+          if (updatedProfile) setProfile(updatedProfile);
         }
       } catch (error: any) {
         if (error.message === 'TIMEOUT_GET_SESSION') {
           console.error('⌛ PanelFit: Supabase getSession timeout.');
+          setConnectionError('timeout');
         } else {
           console.error('Error checking user session:', error);
+          setConnectionError('error');
         }
       } finally {
         setLoading(false);
@@ -169,40 +160,61 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (loading) {
-    // Las nuevas claves de Supabase (sb_publishable) miden unos 46 caracteres.
-    // Las antiguas miden unos 160. Ponemos el límite en 40 para estar seguros.
+  const [connectionError, setConnectionError] = useState<'none' | 'timeout' | 'error'>('none');
+
+  if (loading || connectionError !== 'none') {
     const isKeyTooShort = (import.meta.env.VITE_SUPABASE_ANON_KEY?.length || 0) < 40;
     
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center p-6">
         <div className="flex flex-col items-center gap-6 max-w-sm text-center">
-          <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+          {connectionError === 'none' ? (
+            <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <div className="w-12 h-12 bg-warn/10 text-warn rounded-full flex items-center justify-center">
+              <Clock className="w-6 h-6" />
+            </div>
+          )}
+          
           <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-widest text-muted">Cargando PanelFit...</p>
+            <h2 className="text-sm font-bold uppercase tracking-widest">
+              {connectionError === 'none' ? 'Cargando PanelFit...' : 'Error de Conexión'}
+            </h2>
+            
+            {connectionError === 'timeout' && (
+              <p className="text-[10px] text-muted leading-relaxed">
+                Supabase no responde. Esto suele ocurrir si la URL en Vercel es incorrecta o si el proyecto en Supabase.com está pausado.
+              </p>
+            )}
+
             {isKeyTooShort && (
               <div className="p-3 bg-warn/10 border border-warn/20 rounded-lg mt-4">
                 <p className="text-[10px] text-warn font-bold uppercase">⚠️ Clave no detectada</p>
                 <p className="text-[10px] text-muted mt-1">
-                  No detectamos una clave válida de Supabase en Vercel. 
-                  Asegúrate de haber configurado VITE_SUPABASE_ANON_KEY.
+                  Asegúrate de haber configurado VITE_SUPABASE_ANON_KEY correctamente.
                 </p>
               </div>
             )}
-            <p className="text-[10px] text-muted/50 leading-relaxed">
-              Si esto tarda demasiado, revisa la conexión con Supabase en Vercel.
-            </p>
           </div>
           
-          <button 
-            onClick={() => {
-              setLoading(false);
-              setIsDemo(true);
-            }}
-            className="mt-4 px-6 py-3 bg-warn/10 text-warn border border-warn/20 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-warn/20 transition-colors"
-          >
-            Entrar en Modo Demo (Bypass)
-          </button>
+          <div className="flex flex-col gap-2 w-full">
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 bg-ink text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:opacity-90 transition-opacity"
+            >
+              Reintentar Conexión
+            </button>
+            <button 
+              onClick={() => {
+                setLoading(false);
+                setConnectionError('none');
+                setIsDemo(true);
+              }}
+              className="px-6 py-3 bg-accent/10 text-accent border border-accent/20 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-accent/20 transition-colors"
+            >
+              Entrar en Modo Demo
+            </button>
+          </div>
         </div>
       </div>
     );
