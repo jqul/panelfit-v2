@@ -68,7 +68,7 @@ export default function App() {
             .from('entrenadores')
             .select('*')
             .eq('uid', session.user.id)
-            .single();
+            .maybeSingle();
           
           if (profileError) {
             console.error('Profile fetch error:', profileError);
@@ -113,7 +113,7 @@ export default function App() {
           .from('entrenadores')
           .select('*')
           .eq('uid', session.user.id)
-          .single();
+          .maybeSingle();
         
         let updatedProfile = profileData as UserProfile;
 
