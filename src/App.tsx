@@ -160,10 +160,11 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const [connectionError, setConnectionError] = useState<'none' | 'timeout' | 'error'>('none');
+  const [showDebug, setShowDebug] = useState(false);
 
   if (loading || connectionError !== 'none') {
     const isKeyTooShort = (import.meta.env.VITE_SUPABASE_ANON_KEY?.length || 0) < 40;
+    const currentUrl = import.meta.env.VITE_SUPABASE_URL || 'No configurada';
     
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center p-6">
@@ -214,6 +215,33 @@ export default function App() {
             >
               Entrar en Modo Demo
             </button>
+            
+            <button 
+              onClick={() => setShowDebug(!showDebug)}
+              className="text-[9px] text-muted/50 uppercase tracking-widest hover:text-muted transition-colors mt-2"
+            >
+              {showDebug ? 'Ocultar Diagnóstico' : 'Ver Diagnóstico'}
+            </button>
+
+            {showDebug && (
+              <div className="mt-4 p-4 bg-card border border-border rounded-xl text-left space-y-3">
+                <div>
+                  <p className="text-[9px] text-muted uppercase font-bold">URL Detectada:</p>
+                  <code className="block text-[10px] font-mono break-all bg-bg p-2 rounded border border-border mt-1">
+                    {currentUrl}
+                  </code>
+                </div>
+                <div>
+                  <p className="text-[9px] text-muted uppercase font-bold">Key Detectada:</p>
+                  <code className="block text-[10px] font-mono break-all bg-bg p-2 rounded border border-border mt-1">
+                    {import.meta.env.VITE_SUPABASE_ANON_KEY ? `${import.meta.env.VITE_SUPABASE_ANON_KEY.substring(0, 15)}...` : 'No configurada'}
+                  </code>
+                </div>
+                <p className="text-[9px] text-muted italic">
+                  Si la URL no coincide con la de tu proyecto, revisa las variables de entorno en Vercel y haz un "Redeploy".
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
