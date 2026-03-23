@@ -20,7 +20,7 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
 
   useEffect(() => {
     const fetchClients = async () => {
-      if (userProfile.uid === 'demo-trainer') {
+      if (userProfile.uid === 'demo-trainer' || userProfile.uid.startsWith('demo-')) {
         setClients([
           {
             id: 'demo-client-1',
@@ -318,8 +318,8 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
                     <h3 className="text-lg font-serif font-bold">Crecimiento de Alumnos</h3>
                     <p className="text-[10px] text-muted uppercase tracking-widest font-bold">Histórico</p>
                   </div>
-                  <div className="h-[250px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
+                  <div className="h-[250px] w-full" style={{ minHeight: '250px' }}>
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                       <AreaChart data={chartData}>
                         <defs>
                           <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
