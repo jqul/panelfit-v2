@@ -158,19 +158,24 @@ export default function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center p-6">
-        <div className="flex flex-col items-center gap-6 max-w-xs text-center">
+        <div className="flex flex-col items-center gap-6 max-w-sm text-center">
           <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
           <div className="space-y-2">
             <p className="text-xs font-bold uppercase tracking-widest text-muted">Cargando PanelFit...</p>
-            <p className="text-[10px] text-muted/60">Comprobando conexión con la base de datos</p>
+            <p className="text-[10px] text-muted/50 leading-relaxed">
+              Si esto tarda demasiado, revisa la conexión con Supabase en Vercel.
+            </p>
           </div>
           
-          {/* Botón de emergencia que aparece tras unos segundos */}
+          {/* Botón de emergencia que aparece tras el timeout */}
           <button 
-            onClick={() => setLoading(false)}
-            className="mt-4 text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/20 px-4 py-2 rounded-full hover:bg-accent/5 transition-colors"
+            onClick={() => {
+              setLoading(false);
+              setIsDemo(true);
+            }}
+            className="mt-4 px-6 py-3 bg-warn/10 text-warn border border-warn/20 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-warn/20 transition-colors"
           >
-            ¿Tarda demasiado? Entrar de todos modos
+            Entrar en Modo Demo (Bypass)
           </button>
         </div>
       </div>
