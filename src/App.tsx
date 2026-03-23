@@ -28,18 +28,32 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('c');
     
+    // Timeout de seguridad para evitar carga infinita
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn('Supabase connection timeout');
+        setLoading(false);
+      }
+    }, 6000);
+
     if (token) {
       const fetchClientByToken = async () => {
-        const { data, error } = await supabase
-          .from('clientes')
-          .select('*')
-          .eq('token', token)
-          .single();
-        
-        if (data && !error) {
-          setSelectedClient(data as ClientData);
+        try {
+          const { data, error } = await supabase
+            .from('clientes')
+            .select('*')
+            .eq('token', token)
+            .single();
+          
+          if (data && !error) {
+            setSelectedClient(data as ClientData);
+          }
+        } catch (e) {
+          console.error('Error fetching client:', e);
+        } finally {
+          setLoading(false);
+          clearTimeout(timeout);
         }
-        setLoading(false);
       };
       fetchClientByToken();
       return;
@@ -50,12 +64,16 @@ export default function App() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           setUser(session.user);
-          const { data: profileData } = await supabase
+          const { data: profileData, error: profileError } = await supabase
             .from('entrenadores')
             .select('*')
             .eq('uid', session.user.id)
             .single();
           
+          if (profileError) {
+            console.error('Profile fetch error:', profileError);
+          }
+
           let updatedProfile = profileData as UserProfile;
           
           // Auto-fix for Super Admin
@@ -82,6 +100,7 @@ export default function App() {
         console.error('Error checking user session:', error);
       } finally {
         setLoading(false);
+        clearTimeout(timeout);
       }
     };
 
@@ -129,7 +148,10 @@ export default function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-bold uppercase tracking-widest text-muted">Cargando PanelFit...</p>
+        </div>
       </div>
     );
   }
@@ -176,11 +198,40 @@ export default function App() {
     return <Auth onAuthSuccess={(u) => setUser(u)} />;
   }
 
+  // Si el usuario está logueado pero el perfil aún no ha cargado
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center p-6 text-center">
+        <div className="max-w-md space-y-6">
+          <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
+          <h1 className="text-2xl font-serif font-bold">Sincronizando Perfil</h1>
+          <p className="text-muted text-sm">
+            Estamos preparando tu espacio de trabajo. Si esto tarda demasiado, es posible que haya un problema de conexión con la base de datos.
+          </p>
+          <div className="flex flex-col gap-3">
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-ink text-white px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest"
+            >
+              Reintentar Carga
+            </button>
+            <button 
+              onClick={() => supabase.auth.signOut()}
+              className="text-accent text-xs font-bold uppercase tracking-widest hover:underline"
+            >
+              Cerrar Sesión
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Layout>
-      {profile?.role === 'super_admin' ? (
+      {profile.role === 'super_admin' ? (
         <SuperAdminDashboard userProfile={profile} />
-      ) : profile?.role === 'trainer' && !profile.approved ? (
+      ) : profile.role === 'trainer' && !profile.approved ? (
         <div className="min-h-screen bg-bg flex items-center justify-center p-6 text-center">
           <div className="max-w-md space-y-6">
             <div className="w-16 h-16 bg-warn/10 text-warn rounded-full flex items-center justify-center mx-auto">
