@@ -157,10 +157,21 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
+      <div className="min-h-screen bg-bg flex items-center justify-center p-6">
+        <div className="flex flex-col items-center gap-6 max-w-xs text-center">
           <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs font-bold uppercase tracking-widest text-muted">Cargando PanelFit...</p>
+          <div className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-widest text-muted">Cargando PanelFit...</p>
+            <p className="text-[10px] text-muted/60">Comprobando conexión con la base de datos</p>
+          </div>
+          
+          {/* Botón de emergencia que aparece tras unos segundos */}
+          <button 
+            onClick={() => setLoading(false)}
+            className="mt-4 text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/20 px-4 py-2 rounded-full hover:bg-accent/5 transition-colors"
+          >
+            ¿Tarda demasiado? Entrar de todos modos
+          </button>
         </div>
       </div>
     );
