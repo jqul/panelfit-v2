@@ -25,16 +25,17 @@ export default function App() {
   };
 
   useEffect(() => {
+    console.log('🚀 PanelFit: Iniciando aplicación...');
     const params = new URLSearchParams(window.location.search);
     const token = params.get('c');
     
     // Timeout de seguridad para evitar carga infinita
     const timeout = setTimeout(() => {
       if (loading) {
-        console.warn('Supabase connection timeout');
+        console.warn('⚠️ PanelFit: La conexión con Supabase está tardando demasiado.');
         setLoading(false);
       }
-    }, 6000);
+    }, 5000);
 
     if (token) {
       const fetchClientByToken = async () => {
@@ -60,9 +61,18 @@ export default function App() {
     }
 
     const checkUser = async () => {
+      console.log('🔍 PanelFit: Comprobando sesión de usuario...');
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('🔥 PanelFit: Error al obtener sesión:', sessionError);
+          setLoading(false);
+          return;
+        }
+
         if (session?.user) {
+          console.log('👤 PanelFit: Usuario logueado:', session.user.email);
           setUser(session.user);
           const { data: profileData, error: profileError } = await supabase
             .from('entrenadores')
