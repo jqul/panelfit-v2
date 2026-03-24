@@ -129,13 +129,27 @@ export function Auth({ onAuthSuccess }: { onAuthSuccess: (user: any) => void }) 
             {loading ? 'Procesando...' : isLogin ? 'Entrar' : 'Registrarse'}
           </Button>
 
-          <div className="text-center">
+          <div className="text-center space-y-4">
             <button
               type="button"
-              className="text-sm text-accent hover:underline"
+              className="text-sm text-accent hover:underline block w-full"
               onClick={() => setIsLogin(!isLogin)}
             >
               {isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
+            </button>
+            
+            <button
+              type="button"
+              className="text-[10px] text-muted hover:text-warn uppercase tracking-widest font-bold transition-colors"
+              onClick={() => {
+                if (confirm('¿Estás seguro? Esto cerrará tu sesión y limpiará todos los datos locales para solucionar problemas de carga.')) {
+                  localStorage.clear();
+                  sessionStorage.clear();
+                  window.location.reload();
+                }
+              }}
+            >
+              ¿Problemas para entrar? Limpiar datos
             </button>
           </div>
         </form>

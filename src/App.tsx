@@ -84,8 +84,39 @@ export default function App() {
     }
   };
 
+  const clearAllData = async () => {
+    console.log('🧹 PanelFit: Limpiando todos los datos locales...');
+    try {
+      await supabase.auth.signOut();
+      localStorage.clear();
+      sessionStorage.clear();
+      // Borrar cookies de supabase si existen
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i];
+        const eqPos = cookie.indexOf("=");
+        const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+        if (name.trim().includes('sb-')) {
+          document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+        }
+      }
+      window.location.reload();
+    } catch (e) {
+      console.error('Error clearing data:', e);
+      window.location.reload();
+    }
+  };
+
   useEffect(() => {
     console.log('🚀 PanelFit: Iniciando aplicación...');
+    
+    // Log de datos locales para depuración
+    const sbSession = localStorage.getItem('sb-thurxdxazqqxuzbupghv-auth-token');
+    console.log('📦 PanelFit: Datos locales encontrados:', {
+      hasSbSession: !!sbSession,
+      localStorageKeys: Object.keys(localStorage),
+    });
+
     const params = new URLSearchParams(window.location.search);
     const token = params.get('c');
     
@@ -194,6 +225,12 @@ export default function App() {
               Reintentar Conexión
             </button>
             <button 
+              onClick={clearAllData}
+              className="px-6 py-3 bg-warn/10 text-warn border border-warn/20 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-warn/20 transition-colors"
+            >
+              Limpiar Datos y Reiniciar
+            </button>
+            <button 
               onClick={() => {
                 setLoading(false);
                 setConnectionError('none');
@@ -288,6 +325,12 @@ export default function App() {
               className="bg-ink text-white px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest"
             >
               Reintentar Carga
+            </button>
+            <button 
+              onClick={clearAllData}
+              className="bg-warn/10 text-warn border border-warn/20 px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest"
+            >
+              Limpiar Datos y Reiniciar
             </button>
             <button 
               onClick={() => {
