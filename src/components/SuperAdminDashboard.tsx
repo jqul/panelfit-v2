@@ -14,14 +14,22 @@ export function SuperAdminDashboard({ userProfile }: { userProfile: UserProfile 
 
   const fetchData = async () => {
     setLoading(true);
-    const [trainersRes, clientsRes] = await Promise.all([
-      supabase.from('entrenadores').select('*').order('createdAt', { ascending: false }),
-      supabase.from('clientes').select('*').order('createdAt', { ascending: false })
-    ]);
+    try {
+      const [trainersRes, clientsRes] = await Promise.all([
+        supabase.from('entrenadores').select('*').order('createdAt', { ascending: false }),
+        supabase.from('clientes').select('*').order('createdAt', { ascending: false })
+      ]);
 
-    if (trainersRes.data) setTrainers(trainersRes.data as UserProfile[]);
-    if (clientsRes.data) setClients(clientsRes.data as ClientData[]);
-    setLoading(false);
+      if (trainersRes.error) console.error('Error cargando entrenadores:', trainersRes.error);
+      if (clientsRes.error) console.error('Error cargando clientes:', clientsRes.error);
+
+      if (trainersRes.data) setTrainers(trainersRes.data as UserProfile[]);
+      if (clientsRes.data) setClients(clientsRes.data as ClientData[]);
+    } catch (err) {
+      console.error('Error fatal en fetchData:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -367,6 +375,64 @@ export function SuperAdminDashboard({ userProfile }: { userProfile: UserProfile 
                     <tr>
                       <td colSpan={5} className="px-6 py-12 text-center text-muted italic">
                         No se encontraron entrenadores
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Global Clients List */}
+          <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+            <div className="p-6 border-b border-border">
+              <h2 className="text-xl font-serif font-bold">Todos los Clientes</h2>
+              <p className="text-[10px] text-muted uppercase tracking-widest font-bold mt-1">Vista global de la plataforma</p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-bg-alt/50">
+                    <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-muted">Cliente</th>
+                    <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-muted">Entrenador</th>
+                    <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-muted">Métricas</th>
+                    <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-muted">Fecha Registro</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {loading ? (
+                    [1, 2, 3].map(i => (
+                      <tr key={i} className="animate-pulse">
+                        <td colSpan={4} className="px-6 py-8 h-16 bg-bg-alt/20" />
+                      </tr>
+                    ))
+                  ) : clients.length > 0 ? (
+                    clients.map(client => {
+                      const trainer = trainers.find(t => t.uid === client.trainerId);
+                      return (
+                        <tr key={client.id} className="hover:bg-bg-alt/30 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="font-medium text-sm">{client.name} {client.surname}</div>
+                            <div className="text-[9px] font-mono text-muted/50 mt-1">{client.id}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm">{trainer?.displayName || 'Sin asignar'}</div>
+                            <div className="text-[10px] text-muted">{trainer?.email}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-muted">{client.weight}kg / {client.fatPercentage}%</div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-muted">
+                            {new Date(client.createdAt).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-muted italic">
+                        No hay clientes registrados en la plataforma
                       </td>
                     </tr>
                   )}

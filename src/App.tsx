@@ -17,42 +17,6 @@ export default function App() {
   const [showApp, setShowApp] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
   const [connectionError, setConnectionError] = useState<'none' | 'timeout' | 'error'>('none');
-  const [showDebug, setShowDebug] = useState(false);
-  const [showLogs, setShowLogs] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
-
-  useEffect(() => {
-    const originalLog = console.log;
-    const originalError = console.error;
-    const originalWarn = console.warn;
-
-    console.log = (...args) => {
-      setLogs(prev => [...prev.slice(-9), `[LOG] ${args.join(' ')}`]);
-      originalLog(...args);
-    };
-    console.error = (...args) => {
-      setLogs(prev => [...prev.slice(-9), `[ERR] ${args.join(' ')}`]);
-      originalError(...args);
-    };
-    console.warn = (...args) => {
-      setLogs(prev => [...prev.slice(-9), `[WRN] ${args.join(' ')}`]);
-      originalWarn(...args);
-    };
-
-    return () => {
-      console.log = originalLog;
-      console.error = originalError;
-      console.warn = originalWarn;
-    };
-  }, []);
-
-  const demoProfile: UserProfile = {
-    uid: 'demo-trainer',
-    email: 'demo@panelfit.com',
-    displayName: 'Coach Demo',
-    role: 'trainer',
-    createdAt: Date.now()
-  };
 
   useEffect(() => {
     console.log('🚀 PanelFit: Iniciando aplicación...');
@@ -63,9 +27,10 @@ export default function App() {
     const timeout = setTimeout(() => {
       if (loading) {
         console.warn('⚠️ PanelFit: La conexión con Supabase está tardando demasiado.');
+        setConnectionError('timeout');
         setLoading(false);
       }
-    }, 5000);
+    }, 10000);
 
     if (token) {
       const fetchClientByToken = async () => {
@@ -91,27 +56,12 @@ export default function App() {
     }
 
     const checkUser = async () => {
-      console.log('🔍 PanelFit: Comprobando sesión de usuario...');
       try {
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('TIMEOUT_GET_SESSION')), 10000)
-        );
-
-        console.log('⏳ PanelFit: Esperando respuesta de Supabase (máx 10s)...');
-        const { data: { session }, error: sessionError } = await Promise.race([
-          sessionPromise,
-          timeoutPromise
-        ]) as any;
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        if (sessionError) {
-          console.error('🔥 PanelFit: Error de sesión recibido:', sessionError);
-          throw sessionError;
-        }
-        console.log('✅ PanelFit: Respuesta de Supabase recibida.');
+        if (sessionError) throw sessionError;
 
         if (session?.user) {
-          console.log('👤 PanelFit: Usuario logueado:', session.user.email);
           setUser(session.user);
           const { data: profileData } = await supabase
             .from('entrenadores')
@@ -140,13 +90,8 @@ export default function App() {
           if (updatedProfile) setProfile(updatedProfile);
         }
       } catch (error: any) {
-        if (error.message === 'TIMEOUT_GET_SESSION') {
-          console.error('⌛ PanelFit: Supabase getSession timeout.');
-          setConnectionError('timeout');
-        } else {
-          console.error('Error checking user session:', error);
-          setConnectionError('error');
-        }
+        console.error('Error checking user session:', error);
+        setConnectionError('error');
       } finally {
         setLoading(false);
         clearTimeout(timeout);
@@ -195,9 +140,6 @@ export default function App() {
   }, []);
 
   if (loading || connectionError !== 'none') {
-    const isKeyTooShort = (import.meta.env.VITE_SUPABASE_ANON_KEY?.length || 0) < 40;
-    const currentUrl = import.meta.env.VITE_SUPABASE_URL || 'No configurada';
-    
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center p-6">
         <div className="flex flex-col items-center gap-6 max-w-sm text-center">
@@ -214,19 +156,10 @@ export default function App() {
               {connectionError === 'none' ? 'Cargando PanelFit...' : 'Error de Conexión'}
             </h2>
             
-            {connectionError === 'timeout' && (
+            {connectionError !== 'none' && (
               <p className="text-[10px] text-muted leading-relaxed">
-                Supabase no responde. Esto suele ocurrir si la URL en Vercel es incorrecta o si el proyecto en Supabase.com está pausado.
+                No hemos podido conectar con el servidor. Por favor, comprueba tu conexión a internet o intenta recargar la página.
               </p>
-            )}
-
-            {isKeyTooShort && (
-              <div className="p-3 bg-warn/10 border border-warn/20 rounded-lg mt-4">
-                <p className="text-[10px] text-warn font-bold uppercase">⚠️ Clave no detectada</p>
-                <p className="text-[10px] text-muted mt-1">
-                  Asegúrate de haber configurado VITE_SUPABASE_ANON_KEY correctamente.
-                </p>
-              </div>
             )}
           </div>
           
@@ -241,64 +174,12 @@ export default function App() {
               onClick={() => {
                 setLoading(false);
                 setConnectionError('none');
-              }}
-              className="px-6 py-3 bg-accent/10 text-accent border border-accent/20 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-accent/20 transition-colors"
-            >
-              Intentar Login de todas formas
-            </button>
-            <button 
-              onClick={() => {
-                setLoading(false);
-                setConnectionError('none');
                 setIsDemo(true);
               }}
               className="px-6 py-3 bg-bg-alt text-muted border border-border rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-bg-alt/80 transition-colors"
             >
               Entrar en Modo Demo
             </button>
-            
-            <div className="flex justify-center gap-4 mt-2">
-              <button 
-                onClick={() => setShowDebug(!showDebug)}
-                className="text-[9px] text-muted/50 uppercase tracking-widest hover:text-muted transition-colors"
-              >
-                {showDebug ? 'Ocultar Diagnóstico' : 'Ver Diagnóstico'}
-              </button>
-              <button 
-                onClick={() => setShowLogs(!showLogs)}
-                className="text-[9px] text-muted/50 uppercase tracking-widest hover:text-muted transition-colors"
-              >
-                {showLogs ? 'Ocultar Logs' : 'Ver Logs'}
-              </button>
-            </div>
-
-            {showDebug && (
-              <div className="mt-4 p-4 bg-card border border-border rounded-xl text-left space-y-3">
-                <div>
-                  <p className="text-[9px] text-muted uppercase font-bold">URL Detectada:</p>
-                  <code className="block text-[10px] font-mono break-all bg-bg p-2 rounded border border-border mt-1">
-                    {currentUrl}
-                  </code>
-                </div>
-                <div>
-                  <p className="text-[9px] text-muted uppercase font-bold">Key Detectada:</p>
-                  <code className="block text-[10px] font-mono break-all bg-bg p-2 rounded border border-border mt-1">
-                    {import.meta.env.VITE_SUPABASE_ANON_KEY ? `${import.meta.env.VITE_SUPABASE_ANON_KEY.substring(0, 15)}...` : 'No configurada'}
-                  </code>
-                </div>
-              </div>
-            )}
-
-            {showLogs && (
-              <div className="mt-4 p-4 bg-ink text-white rounded-xl text-left space-y-1 overflow-hidden">
-                <p className="text-[9px] text-white/50 uppercase font-bold mb-2">Últimos Eventos:</p>
-                {logs.map((log, i) => (
-                  <div key={i} className="text-[9px] font-mono whitespace-pre-wrap break-all border-b border-white/10 pb-1">
-                    {log}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>
