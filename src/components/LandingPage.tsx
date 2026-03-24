@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Sparkles, Dumbbell, Camera, BarChart3, Utensils, Clock } from 'lucide-react';
 
 export function LandingPage({ onEnterApp, onEnterDemo }: { onEnterApp: () => void, onEnterDemo: () => void }) {
+  console.log('🏠 PanelFit: LandingPage render');
   const features = [
     { icon: Dumbbell, title: 'Plan por semanas', desc: 'Diseña bloques de entrenamiento con progresión de pesos semana a semana.' },
     { icon: Camera, title: 'Fotos de progreso', desc: 'El cliente sube fotos y recibe análisis profesional por IA.' },

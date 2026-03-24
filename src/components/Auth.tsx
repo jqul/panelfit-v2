@@ -14,6 +14,7 @@ export function Auth({ onAuthSuccess }: { onAuthSuccess: (user: any) => void }) 
     e.preventDefault();
     setError('');
     setLoading(true);
+    console.log('🔑 PanelFit: Intentando', isLogin ? 'login' : 'registro', 'para', email);
 
     try {
       if (isLogin) {

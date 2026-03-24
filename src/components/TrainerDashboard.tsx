@@ -10,6 +10,7 @@ import { TrainingTemplates } from './TrainingTemplates';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserProfile, onLogout: () => void }) {
+  console.log('🏋️ PanelFit: TrainerDashboard render');
   const [clients, setClients] = useState<ClientData[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');

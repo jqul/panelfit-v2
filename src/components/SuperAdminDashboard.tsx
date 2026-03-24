@@ -6,6 +6,7 @@ import { Button } from './Button';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 export function SuperAdminDashboard({ userProfile }: { userProfile: UserProfile }) {
+  console.log('👑 PanelFit: SuperAdminDashboard render');
   const [trainers, setTrainers] = useState<UserProfile[]>([]);
   const [clients, setClients] = useState<ClientData[]>([]);
   const [loading, setLoading] = useState(true);

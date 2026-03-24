@@ -36,6 +36,7 @@ export function ClientPanel({
   isTrainer?: boolean, 
   onBack?: () => void 
 }) {
+  console.log('📱 PanelFit: ClientPanel render', client.name);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [plan, setPlan] = useState<TrainingPlan | null>(null);
   const [logs, setLogs] = useState<TrainingLogs>({});

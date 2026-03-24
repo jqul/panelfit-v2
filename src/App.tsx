@@ -17,23 +17,89 @@ export default function App() {
   const [showApp, setShowApp] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
   const [connectionError, setConnectionError] = useState<'none' | 'timeout' | 'error'>('none');
+  
+  console.log('🔄 PanelFit Render:', { 
+    loading, 
+    user: user?.email, 
+    profile: profile?.role, 
+    showApp, 
+    isDemo, 
+    connectionError 
+  });
+
+  const demoProfile: UserProfile = {
+    uid: 'demo',
+    email: 'demo@panelfit.com',
+    displayName: 'Entrenador Demo',
+    role: 'trainer',
+    approved: true,
+    createdAt: Date.now()
+  };
+
+  const fetchAndRepairProfile = async (sessionUser: any) => {
+    console.log('🔍 PanelFit: Sincronizando perfil para', sessionUser.email);
+    try {
+      const { data: profileData } = await supabase
+        .from('entrenadores')
+        .select('*')
+        .eq('uid', sessionUser.id)
+        .maybeSingle();
+      
+      let updatedProfile = profileData as UserProfile;
+      
+      // Auto-repair profile if missing
+      if (!updatedProfile) {
+        console.log('🛠️ PanelFit: Perfil no encontrado, reparando...');
+        const isSuperAdmin = sessionUser.email === 'javier.quinones.lopez@gmail.com';
+        const newProfile = {
+          uid: sessionUser.id,
+          email: sessionUser.email,
+          displayName: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0] || 'Entrenador',
+          role: isSuperAdmin ? 'super_admin' : 'trainer',
+          approved: isSuperAdmin,
+          createdAt: Date.now()
+        };
+        
+        const { error: upsertError } = await supabase.from('entrenadores').upsert(newProfile);
+        if (!upsertError) {
+          console.log('✅ PanelFit: Perfil reparado con éxito.');
+          updatedProfile = newProfile as UserProfile;
+        } else {
+          console.error('❌ PanelFit: Error al reparar perfil:', upsertError);
+        }
+      } else if (sessionUser.email === 'javier.quinones.lopez@gmail.com' && (updatedProfile.role !== 'super_admin' || !updatedProfile.approved)) {
+        console.log('🛠️ PanelFit: Corrigiendo permisos de Super Admin...');
+        const fixedProfile = { ...updatedProfile, role: 'super_admin', approved: true };
+        await supabase.from('entrenadores').upsert(fixedProfile);
+        updatedProfile = fixedProfile as UserProfile;
+        console.log('✅ PanelFit: Permisos corregidos.');
+      }
+      
+      if (updatedProfile) {
+        console.log('👤 PanelFit: Perfil cargado:', updatedProfile.role);
+        setProfile(updatedProfile);
+      }
+    } catch (error) {
+      console.error('❌ PanelFit: Error crítico en sincronización:', error);
+    }
+  };
 
   useEffect(() => {
     console.log('🚀 PanelFit: Iniciando aplicación...');
     const params = new URLSearchParams(window.location.search);
     const token = params.get('c');
     
-    // Timeout de seguridad para evitar carga infinita
     const timeout = setTimeout(() => {
       if (loading) {
         console.warn('⚠️ PanelFit: La conexión con Supabase está tardando demasiado.');
         setConnectionError('timeout');
         setLoading(false);
       }
-    }, 10000);
+    }, 15000); // Aumentado a 15s
 
     if (token) {
       const fetchClientByToken = async () => {
+        console.log('🔍 PanelFit: Buscando cliente por token:', token);
         try {
           const { data, error } = await supabase
             .from('clientes')
@@ -42,108 +108,58 @@ export default function App() {
             .single();
           
           if (data && !error) {
+            console.log('✅ PanelFit: Cliente encontrado:', data.nombre);
             setSelectedClient(data as ClientData);
+          } else {
+            console.warn('⚠️ PanelFit: Token inválido o cliente no encontrado.');
           }
         } catch (e) {
-          console.error('Error fetching client:', e);
+          console.error('❌ PanelFit: Error buscando cliente:', e);
         } finally {
           setLoading(false);
           clearTimeout(timeout);
         }
       };
       fetchClientByToken();
-      return;
+    } else {
+      const checkUser = async () => {
+        console.log('🔍 PanelFit: Comprobando sesión inicial...');
+        try {
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          if (sessionError) throw sessionError;
+          if (session?.user) {
+            console.log('✅ PanelFit: Sesión encontrada:', session.user.email);
+            setUser(session.user);
+            await fetchAndRepairProfile(session.user);
+          } else {
+            console.log('ℹ️ PanelFit: No hay sesión activa.');
+          }
+        } catch (error: any) {
+          console.error('❌ PanelFit: Error comprobando sesión:', error);
+          setConnectionError('error');
+        } finally {
+          setLoading(false);
+          clearTimeout(timeout);
+        }
+      };
+      checkUser();
     }
 
-    const checkUser = async () => {
-      try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) throw sessionError;
-
-        if (session?.user) {
-          setUser(session.user);
-          const { data: profileData } = await supabase
-            .from('entrenadores')
-            .select('*')
-            .eq('uid', session.user.id)
-            .maybeSingle();
-          
-          let updatedProfile = profileData as UserProfile;
-          
-          // Auto-repair profile if missing
-          if (!updatedProfile) {
-            const isSuperAdmin = session.user.email === 'javier.quinones.lopez@gmail.com';
-            const newProfile = {
-              uid: session.user.id,
-              email: session.user.email,
-              displayName: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Entrenador',
-              role: isSuperAdmin ? 'super_admin' : 'trainer',
-              approved: isSuperAdmin, // Solo Javier se auto-aprueba
-              createdAt: Date.now()
-            };
-            
-            const { error: upsertError } = await supabase.from('entrenadores').upsert(newProfile);
-            if (!upsertError) {
-              updatedProfile = newProfile as UserProfile;
-            }
-          } else if (session.user.email === 'javier.quinones.lopez@gmail.com' && (updatedProfile.role !== 'super_admin' || !updatedProfile.approved)) {
-            // Ensure Javier is always Super Admin and Approved
-            const fixedProfile = { ...updatedProfile, role: 'super_admin', approved: true };
-            await supabase.from('entrenadores').upsert(fixedProfile);
-            updatedProfile = fixedProfile as UserProfile;
-          }
-          
-          if (updatedProfile) setProfile(updatedProfile);
-        }
-      } catch (error: any) {
-        console.error('Error checking user session:', error);
-        setConnectionError('error');
-      } finally {
-        setLoading(false);
-        clearTimeout(timeout);
-      }
-    };
-
-    checkUser();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔔 PanelFit: Auth Event:', event, session?.user?.email);
       if (session?.user) {
         setUser(session.user);
-        const { data: profileData } = await supabase
-          .from('entrenadores')
-          .select('*')
-          .eq('uid', session.user.id)
-          .maybeSingle();
-        
-        let updatedProfile = profileData as UserProfile;
-
-        // Auto-fix for Super Admin on auth change
-        if (session.user.email === 'javier.quinones.lopez@gmail.com') {
-          if (!updatedProfile || updatedProfile.role !== 'super_admin' || !updatedProfile.approved) {
-            const newProfile = {
-              uid: session.user.id,
-              email: session.user.email,
-              displayName: updatedProfile?.displayName || 'Super Admin',
-              role: 'super_admin',
-              approved: true,
-              createdAt: updatedProfile?.createdAt || Date.now()
-            };
-            await supabase.from('entrenadores').upsert(newProfile);
-            updatedProfile = newProfile as UserProfile;
-          }
-        }
-
-        if (updatedProfile) {
-          setProfile(updatedProfile);
-        }
+        await fetchAndRepairProfile(session.user);
       } else {
         setUser(null);
         setProfile(null);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   if (loading || connectionError !== 'none') {
@@ -181,9 +197,19 @@ export default function App() {
               onClick={() => {
                 setLoading(false);
                 setConnectionError('none');
-                setIsDemo(true);
+                setShowApp(true);
               }}
               className="px-6 py-3 bg-bg-alt text-muted border border-border rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-bg-alt/80 transition-colors"
+            >
+              Saltar y Forzar Login
+            </button>
+            <button 
+              onClick={() => {
+                setLoading(false);
+                setConnectionError('none');
+                setIsDemo(true);
+              }}
+              className="px-6 py-3 text-muted hover:text-ink text-[9px] font-bold uppercase tracking-widest transition-colors"
             >
               Entrar en Modo Demo
             </button>
@@ -228,7 +254,18 @@ export default function App() {
   }
 
   if (!showApp && !user) {
-    return <LandingPage onEnterApp={() => setShowApp(true)} onEnterDemo={() => setIsDemo(true)} />;
+    return (
+      <LandingPage 
+        onEnterApp={() => {
+          console.log('🖱️ PanelFit: Botón Entrar clickeado');
+          setShowApp(true);
+        }} 
+        onEnterDemo={() => {
+          console.log('🖱️ PanelFit: Botón Demo clickeado');
+          setIsDemo(true);
+        }} 
+      />
+    );
   }
 
   if (!user) {
@@ -251,6 +288,25 @@ export default function App() {
               className="bg-ink text-white px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest"
             >
               Reintentar Carga
+            </button>
+            <button 
+              onClick={() => {
+                // Forzar entrada con perfil básico si falla la sincronización
+                if (user) {
+                  const isSuperAdmin = user.email === 'javier.quinones.lopez@gmail.com';
+                  setProfile({
+                    uid: user.id,
+                    email: user.email,
+                    displayName: user.email?.split('@')[0] || 'Entrenador',
+                    role: isSuperAdmin ? 'super_admin' : 'trainer',
+                    approved: isSuperAdmin,
+                    createdAt: Date.now()
+                  });
+                }
+              }}
+              className="bg-bg-alt text-muted border border-border px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest"
+            >
+              Forzar Entrada
             </button>
             <button 
               onClick={() => supabase.auth.signOut()}
