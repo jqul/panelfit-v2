@@ -21,9 +21,12 @@ export function MetricsView({ client, isTrainer }: { client: ClientData, isTrain
   const [showAdd, setShowAdd] = useState(false);
   const [newWeight, setNewWeight] = useState(client.weight.toString());
   const [newFat, setNewFat] = useState(client.fatPercentage.toString());
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchLogs = async () => {
+  const fetchLogs = async () => {
+    setLoading(true);
+    setError(null);
+    try {
       if (client.id.startsWith('demo-client-')) {
         const mockLogs: WeightLog[] = [
           { id: '1', clientId: client.id, weight: client.weight + 2, fatPercentage: client.fatPercentage + 1, date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() },
@@ -36,16 +39,24 @@ export function MetricsView({ client, isTrainer }: { client: ClientData, isTrain
         return;
       }
 
-      const { data, error } = await supabase
+      const { data, error: fetchError } = await supabase
         .from('registros_peso')
         .select('*')
         .eq('clientId', client.id)
         .order('date', { ascending: true });
 
-      if (data) setLogs(data as WeightLog[]);
-      setLoading(false);
-    };
+      if (fetchError) throw fetchError;
 
+      if (data) setLogs(data as WeightLog[]);
+    } catch (err: any) {
+      console.error('❌ PanelFit: Error cargando métricas:', err);
+      setError(err.message || 'No se pudieron cargar las métricas');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchLogs();
   }, [client.id]);
 
@@ -87,6 +98,17 @@ export function MetricsView({ client, isTrainer }: { client: ClientData, isTrain
   const lastWeight = logs[logs.length - 1]?.weight || client.weight;
   const firstWeight = logs[0]?.weight || client.weight;
   const diff = lastWeight - firstWeight;
+
+  if (loading) return <div className="p-8 text-center text-muted">Cargando métricas...</div>;
+
+  if (error) {
+    return (
+      <div className="p-8 text-center bg-warn/5 border border-warn/20 rounded-xl">
+        <p className="text-warn text-sm font-bold mb-4">{error}</p>
+        <Button size="sm" onClick={fetchLogs}>Reintentar</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

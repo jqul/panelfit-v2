@@ -111,7 +111,7 @@ export default function App() {
     console.log('🚀 PanelFit: Iniciando aplicación...');
     
     // Log de datos locales para depuración
-    const sbSession = localStorage.getItem('sb-thurxdxazqqxuzbupghv-auth-token');
+    const sbSession = localStorage.getItem('panelfit-auth-token');
     console.log('📦 PanelFit: Datos locales encontrados:', {
       hasSbSession: !!sbSession,
       localStorageKeys: Object.keys(localStorage),
@@ -178,10 +178,13 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('🔔 PanelFit: Auth Event:', event, session?.user?.email);
-      if (session?.user) {
-        setUser(session.user);
-        await fetchAndRepairProfile(session.user);
-      } else {
+      
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (session?.user) {
+          setUser(session.user);
+          await fetchAndRepairProfile(session.user);
+        }
+      } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setProfile(null);
       }

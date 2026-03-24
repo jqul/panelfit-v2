@@ -41,10 +41,13 @@ export function ClientPanel({
   const [plan, setPlan] = useState<TrainingPlan | null>(null);
   const [logs, setLogs] = useState<TrainingLogs>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeSession, setActiveSession] = useState<any>(null);
 
-  useEffect(() => {
-    const fetchPlanAndLogs = async () => {
+  const fetchPlanAndLogs = async () => {
+    setLoading(true);
+    setError(null);
+    try {
       if (client.id.startsWith('demo-client-')) {
         const mockPlan: TrainingPlan = {
           clientId: client.id,
@@ -85,42 +88,42 @@ export function ClientPanel({
         return;
       }
 
-      try {
-        setLoading(true);
-        const [{ data: planData, error: planError }, { data: logsData, error: logsError }] = await Promise.all([
-          supabase.from('planes').select('*').eq('clientId', client.id).maybeSingle(),
-          supabase.from('registros').select('*').eq('clientId', client.id).maybeSingle()
-        ]);
+      const [{ data: planData, error: planError }, { data: logsData, error: logsError }] = await Promise.all([
+        supabase.from('planes').select('*').eq('clientId', client.id).maybeSingle(),
+        supabase.from('registros').select('*').eq('clientId', client.id).maybeSingle()
+      ]);
 
-        if (planError) console.error('Error fetching plan:', planError);
-        if (logsError) console.error('Error fetching logs:', logsError);
+      if (planError) throw planError;
+      if (logsError) throw logsError;
 
-        if (planData) {
-          setPlan(planData.plan as TrainingPlan);
-        } else if (isTrainer) {
-          const emptyPlan: TrainingPlan = {
-            clientId: client.id,
-            weeks: [],
-            type: 'hipertrofia',
-            restMain: 180,
-            restAcc: 90,
-            restWarn: 30
-          };
-          setPlan(emptyPlan);
-        }
-
-        if (logsData) {
-          setLogs(logsData.logs as TrainingLogs);
-        } else {
-          setLogs({});
-        }
-      } catch (error) {
-        console.error('Error in fetchPlanAndLogs:', error);
-      } finally {
-        setLoading(false);
+      if (planData) {
+        setPlan(planData.plan as TrainingPlan);
+      } else if (isTrainer) {
+        const emptyPlan: TrainingPlan = {
+          clientId: client.id,
+          weeks: [],
+          type: 'hipertrofia',
+          restMain: 180,
+          restAcc: 90,
+          restWarn: 30
+        };
+        setPlan(emptyPlan);
       }
-    };
 
+      if (logsData) {
+        setLogs(logsData.logs as TrainingLogs);
+      } else {
+        setLogs({});
+      }
+    } catch (err: any) {
+      console.error('❌ PanelFit: Error cargando plan y registros:', err);
+      setError(err.message || 'No se pudo cargar el plan de entrenamiento');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchPlanAndLogs();
 
     // Subscriptions
@@ -208,7 +211,36 @@ export function ClientPanel({
     tabs.push({ id: 'settings', label: 'Ajustes', icon: Settings });
   }
 
-  if (loading) return <div className="p-8 text-center">Cargando panel...</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-muted text-sm">Cargando panel del cliente...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-6 p-8 text-center bg-warn/5 border border-warn/20 rounded-2xl">
+        <div className="space-y-2">
+          <h3 className="text-lg font-bold text-warn">Error de Conexión</h3>
+          <p className="text-muted text-sm max-w-md">
+            No hemos podido cargar los datos del entrenamiento. Esto puede deberse a un problema temporal de red o de sesión.
+          </p>
+          <p className="text-warn/60 text-xs font-mono mt-2">{error}</p>
+        </div>
+        <div className="flex gap-4">
+          <Button onClick={() => fetchPlanAndLogs()} className="gap-2">
+            Reintentar
+          </Button>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Recargar Página
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (activeSession) {
     return (

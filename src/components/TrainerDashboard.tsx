@@ -13,14 +13,17 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
   console.log('🏋️ PanelFit: TrainerDashboard render');
   const [clients, setClients] = useState<ClientData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newClient, setNewClient] = useState({ name: '', surname: '' });
   const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'exercises' | 'templates' | 'settings'>('dashboard');
 
-  useEffect(() => {
-    const fetchClients = async () => {
+  const fetchClients = async () => {
+    setLoading(true);
+    setError(null);
+    try {
       if (userProfile.uid === 'demo-trainer' || userProfile.uid.startsWith('demo-')) {
         setClients([
           {
@@ -54,17 +57,25 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
         return;
       }
 
-      const { data, error } = await supabase
+      const { data, error: fetchError } = await supabase
         .from('clientes')
         .select('*')
         .eq('trainerId', userProfile.uid);
       
-      if (data && !error) {
+      if (fetchError) throw fetchError;
+
+      if (data) {
         setClients(data as ClientData[]);
       }
+    } catch (err: any) {
+      console.error('❌ PanelFit: Error cargando clientes:', err);
+      setError(err.message || 'No se pudieron cargar tus clientes');
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
+  useEffect(() => {
     fetchClients();
 
     if (userProfile.uid !== 'demo-trainer') {
@@ -419,7 +430,25 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
                 </div>
               </div>
 
-              {loading ? (
+              {error ? (
+                <div className="flex flex-col items-center justify-center p-12 text-center bg-warn/5 border border-warn/20 rounded-2xl gap-4">
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-bold text-warn">Error de Conexión</h3>
+                    <p className="text-muted text-sm max-w-md mx-auto">
+                      No hemos podido cargar tu lista de clientes. Por favor, comprueba tu conexión o intenta reintentar.
+                    </p>
+                    <p className="text-warn/60 text-xs font-mono mt-2">{error}</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <Button size="sm" onClick={() => fetchClients()} className="gap-2">
+                      Reintentar
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+                      Recargar Página
+                    </Button>
+                  </div>
+                </div>
+              ) : loading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {[1, 2, 3].map(i => (
                     <div key={i} className="h-32 bg-card border border-border rounded-xl animate-pulse" />

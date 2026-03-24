@@ -7,11 +7,14 @@ import { Button } from './Button';
 export function DietView({ clientId, isTrainer }: { clientId: string, isTrainer: boolean }) {
   const [diet, setDiet] = useState<DietPlan | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<DietPlan | null>(null);
 
-  useEffect(() => {
-    const fetchDiet = async () => {
+  const fetchDiet = async () => {
+    setLoading(true);
+    setError(null);
+    try {
       if (clientId.startsWith('demo-client-')) {
         const mockDiet: DietPlan = {
           clientId,
@@ -32,11 +35,13 @@ export function DietView({ clientId, isTrainer }: { clientId: string, isTrainer:
         return;
       }
 
-      const { data, error } = await supabase
+      const { data, error: fetchError } = await supabase
         .from('dietas')
         .select('*')
         .eq('clientId', clientId)
         .maybeSingle();
+
+      if (fetchError) throw fetchError;
 
       if (data) {
         setDiet(data.plan as DietPlan);
@@ -52,24 +57,36 @@ export function DietView({ clientId, isTrainer }: { clientId: string, isTrainer:
         };
         setDiet(emptyDiet);
       }
+    } catch (err: any) {
+      console.error('❌ PanelFit: Error cargando dieta:', err);
+      setError(err.message || 'No se pudo cargar la dieta');
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
+  useEffect(() => {
     fetchDiet();
   }, [clientId, isTrainer]);
 
   const handleSave = async () => {
     if (!editData) return;
 
-    if (!clientId.startsWith('demo-client-')) {
-      await supabase.from('dietas').upsert({
-        clientId,
-        plan: editData
-      });
-    }
+    try {
+      if (!clientId.startsWith('demo-client-')) {
+        const { error: upsertError } = await supabase.from('dietas').upsert({
+          clientId,
+          plan: editData
+        });
+        if (upsertError) throw upsertError;
+      }
 
-    setDiet(editData);
-    setIsEditing(false);
+      setDiet(editData);
+      setIsEditing(false);
+    } catch (err: any) {
+      console.error('❌ PanelFit: Error guardando dieta:', err);
+      alert('Error al guardar: ' + err.message);
+    }
   };
 
   const startEditing = () => {
@@ -78,6 +95,16 @@ export function DietView({ clientId, isTrainer }: { clientId: string, isTrainer:
   };
 
   if (loading) return <div className="p-8 text-center text-muted">Cargando dieta...</div>;
+  
+  if (error) {
+    return (
+      <div className="p-8 text-center bg-warn/5 border border-warn/20 rounded-xl">
+        <p className="text-warn text-sm font-bold mb-4">{error}</p>
+        <Button size="sm" onClick={fetchDiet}>Reintentar</Button>
+      </div>
+    );
+  }
+
   if (!diet && !isTrainer) return <div className="p-8 text-center text-muted">No hay plan nutricional asignado.</div>;
 
   if (isEditing && editData) {

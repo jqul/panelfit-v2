@@ -28,4 +28,27 @@ console.log('🔑 Supabase Config:', {
   keyPrefix: supabaseAnonKey ? supabaseAnonKey.substring(0, 15) + '...' : 'none'
 });
 
-export const supabase = createClient(safeUrl, safeKey);
+export const supabase = createClient(safeUrl, safeKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: window.localStorage,
+    storageKey: 'panelfit-auth-token' // Usar una clave personalizada para evitar conflictos
+  }
+});
+
+/**
+ * Verifica si hay una sesión válida y activa.
+ * Útil para depurar problemas de persistencia.
+ */
+export const checkSession = async () => {
+  const { data: { session }, error } = await supabase.auth.getSession();
+  console.log('🔐 PanelFit: Estado de Sesión:', {
+    active: !!session,
+    user: session?.user?.email,
+    expires: session?.expires_at ? new Date(session.expires_at * 1000).toLocaleString() : 'N/A',
+    error: error?.message || 'Ninguno'
+  });
+  return session;
+};

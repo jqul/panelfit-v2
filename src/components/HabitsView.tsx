@@ -10,11 +10,14 @@ export function HabitsView({ clientId, isTrainer }: { clientId: string, isTraine
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [newHabit, setNewHabit] = useState({ text: '', sub: '' });
+  const [error, setError] = useState<string | null>(null);
 
   const today = new Date().toISOString().split('T')[0];
 
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
       if (clientId.startsWith('demo-client-')) {
         setHabits([
           { id: '1', clientId, text: 'Proteína ≥ 160g', sub: 'Prioritario — no lo saltes', order: 0 },
@@ -26,16 +29,25 @@ export function HabitsView({ clientId, isTrainer }: { clientId: string, isTraine
         return;
       }
 
-      const [{ data: habitsData }, { data: logData }] = await Promise.all([
+      const [{ data: habitsData, error: habitsError }, { data: logData, error: logError }] = await Promise.all([
         supabase.from('habitos').select('*').eq('clientId', clientId).order('order', { ascending: true }),
         supabase.from('registros_habitos').select('*').eq('clientId', clientId).eq('date', today).maybeSingle()
       ]);
 
+      if (habitsError) throw habitsError;
+      if (logError) throw logError;
+
       if (habitsData) setHabits(habitsData as Habit[]);
       if (logData) setCompletedIds((logData as HabitLog).completedHabitIds);
+    } catch (err: any) {
+      console.error('❌ PanelFit: Error cargando hábitos:', err);
+      setError(err.message || 'No se pudieron cargar los hábitos');
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
+  useEffect(() => {
     fetchData();
   }, [clientId, today]);
 
@@ -90,6 +102,15 @@ export function HabitsView({ clientId, isTrainer }: { clientId: string, isTraine
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
   if (loading) return <div className="p-8 text-center text-muted">Cargando hábitos...</div>;
+
+  if (error) {
+    return (
+      <div className="p-8 text-center bg-warn/5 border border-warn/20 rounded-xl">
+        <p className="text-warn text-sm font-bold mb-4">{error}</p>
+        <Button size="sm" onClick={fetchData}>Reintentar</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
