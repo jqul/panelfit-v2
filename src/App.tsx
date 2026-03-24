@@ -18,6 +18,33 @@ export default function App() {
   const [isDemo, setIsDemo] = useState(false);
   const [connectionError, setConnectionError] = useState<'none' | 'timeout' | 'error'>('none');
   const [showDebug, setShowDebug] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
+  const [logs, setLogs] = useState<string[]>([]);
+
+  useEffect(() => {
+    const originalLog = console.log;
+    const originalError = console.error;
+    const originalWarn = console.warn;
+
+    console.log = (...args) => {
+      setLogs(prev => [...prev.slice(-9), `[LOG] ${args.join(' ')}`]);
+      originalLog(...args);
+    };
+    console.error = (...args) => {
+      setLogs(prev => [...prev.slice(-9), `[ERR] ${args.join(' ')}`]);
+      originalError(...args);
+    };
+    console.warn = (...args) => {
+      setLogs(prev => [...prev.slice(-9), `[WRN] ${args.join(' ')}`]);
+      originalWarn(...args);
+    };
+
+    return () => {
+      console.log = originalLog;
+      console.error = originalError;
+      console.warn = originalWarn;
+    };
+  }, []);
 
   const demoProfile: UserProfile = {
     uid: 'demo-trainer',
@@ -68,15 +95,20 @@ export default function App() {
       try {
         const sessionPromise = supabase.auth.getSession();
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('TIMEOUT_GET_SESSION')), 4000)
+          setTimeout(() => reject(new Error('TIMEOUT_GET_SESSION')), 10000)
         );
 
+        console.log('⏳ PanelFit: Esperando respuesta de Supabase (máx 10s)...');
         const { data: { session }, error: sessionError } = await Promise.race([
           sessionPromise,
           timeoutPromise
         ]) as any;
         
-        if (sessionError) throw sessionError;
+        if (sessionError) {
+          console.error('🔥 PanelFit: Error de sesión recibido:', sessionError);
+          throw sessionError;
+        }
+        console.log('✅ PanelFit: Respuesta de Supabase recibida.');
 
         if (session?.user) {
           console.log('👤 PanelFit: Usuario logueado:', session.user.email);
@@ -209,19 +241,36 @@ export default function App() {
               onClick={() => {
                 setLoading(false);
                 setConnectionError('none');
-                setIsDemo(true);
               }}
               className="px-6 py-3 bg-accent/10 text-accent border border-accent/20 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-accent/20 transition-colors"
+            >
+              Intentar Login de todas formas
+            </button>
+            <button 
+              onClick={() => {
+                setLoading(false);
+                setConnectionError('none');
+                setIsDemo(true);
+              }}
+              className="px-6 py-3 bg-bg-alt text-muted border border-border rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-bg-alt/80 transition-colors"
             >
               Entrar en Modo Demo
             </button>
             
-            <button 
-              onClick={() => setShowDebug(!showDebug)}
-              className="text-[9px] text-muted/50 uppercase tracking-widest hover:text-muted transition-colors mt-2"
-            >
-              {showDebug ? 'Ocultar Diagnóstico' : 'Ver Diagnóstico'}
-            </button>
+            <div className="flex justify-center gap-4 mt-2">
+              <button 
+                onClick={() => setShowDebug(!showDebug)}
+                className="text-[9px] text-muted/50 uppercase tracking-widest hover:text-muted transition-colors"
+              >
+                {showDebug ? 'Ocultar Diagnóstico' : 'Ver Diagnóstico'}
+              </button>
+              <button 
+                onClick={() => setShowLogs(!showLogs)}
+                className="text-[9px] text-muted/50 uppercase tracking-widest hover:text-muted transition-colors"
+              >
+                {showLogs ? 'Ocultar Logs' : 'Ver Logs'}
+              </button>
+            </div>
 
             {showDebug && (
               <div className="mt-4 p-4 bg-card border border-border rounded-xl text-left space-y-3">
@@ -237,9 +286,17 @@ export default function App() {
                     {import.meta.env.VITE_SUPABASE_ANON_KEY ? `${import.meta.env.VITE_SUPABASE_ANON_KEY.substring(0, 15)}...` : 'No configurada'}
                   </code>
                 </div>
-                <p className="text-[9px] text-muted italic">
-                  Si la URL no coincide con la de tu proyecto, revisa las variables de entorno en Vercel y haz un "Redeploy".
-                </p>
+              </div>
+            )}
+
+            {showLogs && (
+              <div className="mt-4 p-4 bg-ink text-white rounded-xl text-left space-y-1 overflow-hidden">
+                <p className="text-[9px] text-white/50 uppercase font-bold mb-2">Últimos Eventos:</p>
+                {logs.map((log, i) => (
+                  <div key={i} className="text-[9px] font-mono whitespace-pre-wrap break-all border-b border-white/10 pb-1">
+                    {log}
+                  </div>
+                ))}
               </div>
             )}
           </div>
