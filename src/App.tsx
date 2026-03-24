@@ -108,6 +108,17 @@ export default function App() {
   };
 
   useEffect(() => {
+    const handleError = (e: ErrorEvent) => {
+      console.error('🔥 PanelFit: Error fatal detectado:', e.message);
+      if (e.message.includes('Supabase') || e.message.includes('auth')) {
+        console.warn('🛠️ PanelFit: Posible error de sesión, sugiriendo limpieza...');
+      }
+    };
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
+
+  useEffect(() => {
     console.log('🚀 PanelFit: Iniciando aplicación...');
     
     // Log de datos locales para depuración
@@ -125,8 +136,37 @@ export default function App() {
         console.warn('⚠️ PanelFit: La conexión con Supabase está tardando demasiado.');
         setConnectionError('timeout');
         setLoading(false);
+        
+        // Si hay una sesión guardada pero no carga, podría estar corrupta
+        const sbSession = localStorage.getItem('panelfit-auth-token');
+        if (sbSession) {
+          console.log('🧹 PanelFit: Detectada posible sesión corrupta, limpiando para el próximo intento...');
+          // No limpiamos todo, solo la sesión de auth para forzar re-login
+          localStorage.removeItem('panelfit-auth-token');
+        }
       }
-    }, 15000); // Aumentado a 15s
+    }, 8000); // Reducido a 8s para una respuesta más rápida
+
+    const checkUser = async () => {
+      console.log('🔍 PanelFit: Comprobando sesión inicial...');
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (session?.user) {
+          console.log('✅ PanelFit: Sesión encontrada:', session.user.email);
+          setUser(session.user);
+          await fetchAndRepairProfile(session.user);
+        } else {
+          console.log('ℹ️ PanelFit: No hay sesión activa.');
+        }
+      } catch (error: any) {
+        console.error('❌ PanelFit: Error comprobando sesión:', error);
+        setConnectionError('error');
+      } finally {
+        setLoading(false);
+        clearTimeout(timeout);
+      }
+    };
 
     if (token) {
       const fetchClientByToken = async () => {
@@ -143,9 +183,12 @@ export default function App() {
             setSelectedClient(data as ClientData);
           } else {
             console.warn('⚠️ PanelFit: Token inválido o cliente no encontrado.');
+            // Si el token falla, intentamos cargar la sesión normal
+            checkUser();
           }
         } catch (e) {
           console.error('❌ PanelFit: Error buscando cliente:', e);
+          checkUser();
         } finally {
           setLoading(false);
           clearTimeout(timeout);
@@ -153,26 +196,6 @@ export default function App() {
       };
       fetchClientByToken();
     } else {
-      const checkUser = async () => {
-        console.log('🔍 PanelFit: Comprobando sesión inicial...');
-        try {
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-          if (sessionError) throw sessionError;
-          if (session?.user) {
-            console.log('✅ PanelFit: Sesión encontrada:', session.user.email);
-            setUser(session.user);
-            await fetchAndRepairProfile(session.user);
-          } else {
-            console.log('ℹ️ PanelFit: No hay sesión activa.');
-          }
-        } catch (error: any) {
-          console.error('❌ PanelFit: Error comprobando sesión:', error);
-          setConnectionError('error');
-        } finally {
-          setLoading(false);
-          clearTimeout(timeout);
-        }
-      };
       checkUser();
     }
 
@@ -195,6 +218,27 @@ export default function App() {
       clearTimeout(timeout);
     };
   }, []);
+
+  // Auto-fallback si el perfil tarda demasiado en cargar (mientras el usuario está logueado)
+  useEffect(() => {
+    if (user && !profile && !loading) {
+      const profileTimeout = setTimeout(() => {
+        if (!profile) {
+          console.warn('⚠️ PanelFit: La sincronización de perfil está tardando demasiado. Aplicando perfil de emergencia.');
+          const isSuperAdmin = user.email === 'javier.quinones.lopez@gmail.com';
+          setProfile({
+            uid: user.id,
+            email: user.email,
+            displayName: user.email?.split('@')[0] || 'Entrenador',
+            role: isSuperAdmin ? 'super_admin' : 'trainer',
+            approved: isSuperAdmin,
+            createdAt: Date.now()
+          });
+        }
+      }, 5000); // 5 segundos de margen para el perfil
+      return () => clearTimeout(profileTimeout);
+    }
+  }, [user, profile, loading]);
 
   if (loading || connectionError !== 'none') {
     return (
@@ -220,39 +264,41 @@ export default function App() {
             )}
           </div>
           
-          <div className="flex flex-col gap-2 w-full">
+          <div className="flex flex-col gap-3 w-full">
             <button 
               onClick={() => window.location.reload()}
-              className="px-6 py-3 bg-ink text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:opacity-90 transition-opacity"
+              className="px-6 py-4 bg-ink text-white rounded-full text-xs font-bold uppercase tracking-widest hover:opacity-90 transition-opacity shadow-lg"
             >
               Reintentar Conexión
             </button>
             <button 
               onClick={clearAllData}
-              className="px-6 py-3 bg-warn/10 text-warn border border-warn/20 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-warn/20 transition-colors"
+              className="px-6 py-4 bg-warn/10 text-warn border-2 border-warn/30 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-warn/20 transition-colors"
             >
-              Limpiar Datos y Reiniciar
+              ⚠️ Limpiar Datos y Reiniciar
             </button>
-            <button 
-              onClick={() => {
-                setLoading(false);
-                setConnectionError('none');
-                setShowApp(true);
-              }}
-              className="px-6 py-3 bg-bg-alt text-muted border border-border rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-bg-alt/80 transition-colors"
-            >
-              Saltar y Forzar Login
-            </button>
-            <button 
-              onClick={() => {
-                setLoading(false);
-                setConnectionError('none');
-                setIsDemo(true);
-              }}
-              className="px-6 py-3 text-muted hover:text-ink text-[9px] font-bold uppercase tracking-widest transition-colors"
-            >
-              Entrar en Modo Demo
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => {
+                  setLoading(false);
+                  setConnectionError('none');
+                  setShowApp(true);
+                }}
+                className="flex-1 px-4 py-3 bg-bg-alt text-muted border border-border rounded-full text-[9px] font-bold uppercase tracking-widest hover:bg-bg-alt/80 transition-colors"
+              >
+                Saltar Login
+              </button>
+              <button 
+                onClick={() => {
+                  setLoading(false);
+                  setConnectionError('none');
+                  setIsDemo(true);
+                }}
+                className="flex-1 px-4 py-3 bg-bg-alt text-muted border border-border rounded-full text-[9px] font-bold uppercase tracking-widest hover:bg-bg-alt/80 transition-colors"
+              >
+                Modo Demo
+              </button>
+            </div>
           </div>
         </div>
       </div>
