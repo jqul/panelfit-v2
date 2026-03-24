@@ -88,17 +88,38 @@ export function ClientPanel({
         return;
       }
 
-      const [{ data: planData, error: planError }, { data: logsData, error: logsError }] = await Promise.all([
+      console.log('🔍 PanelFit: Cargando plan y registros para:', client.id);
+      const [planResult, logsResult] = await Promise.all([
         supabase.from('planes').select('*').eq('clientId', client.id).maybeSingle(),
         supabase.from('registros').select('*').eq('clientId', client.id).maybeSingle()
       ]);
 
-      if (planError) throw planError;
-      if (logsError) throw logsError;
+      if (planResult.error) {
+        console.error('❌ PanelFit: Error en tabla "planes":', planResult.error);
+        if (planResult.error.code === '42P01') {
+          console.warn('⚠️ PanelFit: La tabla "planes" no existe en la base de datos.');
+        } else {
+          throw planResult.error;
+        }
+      }
+
+      if (logsResult.error) {
+        console.error('❌ PanelFit: Error en tabla "registros":', logsResult.error);
+        if (logsResult.error.code === '42P01') {
+          console.warn('⚠️ PanelFit: La tabla "registros" no existe en la base de datos.');
+        } else {
+          throw logsResult.error;
+        }
+      }
+
+      const planData = planResult.data;
+      const logsData = logsResult.data;
 
       if (planData) {
+        console.log('✅ PanelFit: Plan cargado correctamente');
         setPlan(planData.plan as TrainingPlan);
       } else if (isTrainer) {
+        console.log('ℹ️ PanelFit: No hay plan, creando uno vacío para el entrenador');
         const emptyPlan: TrainingPlan = {
           clientId: client.id,
           weeks: [],
@@ -111,13 +132,15 @@ export function ClientPanel({
       }
 
       if (logsData) {
+        console.log('✅ PanelFit: Registros cargados correctamente');
         setLogs(logsData.logs as TrainingLogs);
       } else {
+        console.log('ℹ️ PanelFit: No hay registros previos');
         setLogs({});
       }
     } catch (err: any) {
-      console.error('❌ PanelFit: Error cargando plan y registros:', err);
-      setError(err.message || 'No se pudo cargar el plan de entrenamiento');
+      console.error('❌ PanelFit: Error crítico cargando plan y registros:', err);
+      setError(err.message || 'No se pudo cargar el plan de entrenamiento. Verifica tu conexión.');
     } finally {
       setLoading(false);
     }

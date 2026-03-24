@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Users, BarChart3, ClipboardList, LogOut, Search, UserPlus, Settings as SettingsIcon, Dumbbell, LayoutDashboard, TrendingUp, Calendar, ArrowRight } from 'lucide-react';
+import { Plus, Users, BarChart3, ClipboardList, LogOut, Search, UserPlus, Settings as SettingsIcon, Dumbbell, LayoutDashboard, TrendingUp, Calendar, ArrowRight, Trash2 } from 'lucide-react';
 import { supabase } from '../supabase';
 import { Button } from './Button';
 import { ClientData, UserProfile } from '../types';
@@ -19,6 +19,7 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
   const [newClient, setNewClient] = useState({ name: '', surname: '' });
   const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'exercises' | 'templates' | 'settings'>('dashboard');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchClients = async () => {
     setLoading(true);
@@ -72,6 +73,29 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
       setError(err.message || 'No se pudieron cargar tus clientes');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteClient = async (clientId: string) => {
+    if (clientId.startsWith('demo-client-')) {
+      setClients(prev => prev.filter(c => c.id !== clientId));
+      setDeletingId(null);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('clientes')
+        .delete()
+        .eq('id', clientId);
+      
+      if (error) throw error;
+      
+      // The real-time subscription will handle updating the state
+      setDeletingId(null);
+    } catch (error: any) {
+      console.error('❌ PanelFit: Error eliminando cliente:', error);
+      alert('Error al eliminar el cliente: ' + error.message);
     }
   };
 
@@ -472,20 +496,54 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="flex-1 text-[10px] uppercase tracking-wider" onClick={(e) => { e.stopPropagation(); setSelectedClient(client); }}>Plan</Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="flex-1 text-[10px] uppercase tracking-wider"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const url = `${window.location.origin}?c=${client.token}`;
-                            navigator.clipboard.writeText(url);
-                            alert('Enlace copiado al portapapeles');
-                          }}
-                        >
-                          Enlace
-                        </Button>
+                        {deletingId === client.id ? (
+                          <div className="flex-1 flex gap-2">
+                            <Button 
+                              variant="danger" 
+                              size="sm" 
+                              className="flex-1 text-[10px] uppercase tracking-wider"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteClient(client.id); }}
+                            >
+                              Confirmar
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="flex-1 text-[10px] uppercase tracking-wider"
+                              onClick={(e) => { e.stopPropagation(); setDeletingId(null); }}
+                            >
+                              No
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            <Button variant="outline" size="sm" className="flex-1 text-[10px] uppercase tracking-wider" onClick={(e) => { e.stopPropagation(); setSelectedClient(client); }}>Plan</Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="flex-1 text-[10px] uppercase tracking-wider"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const url = `${window.location.origin}?c=${client.token}`;
+                                navigator.clipboard.writeText(url);
+                                alert('Enlace copiado al portapapeles');
+                              }}
+                            >
+                              Enlace
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="px-2 hover:bg-warn/10 hover:border-warn/30 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeletingId(client.id);
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4 text-warn" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                   ))}
