@@ -71,20 +71,27 @@ export default function App() {
           
           let updatedProfile = profileData as UserProfile;
           
-          // Auto-fix for Super Admin (Javier)
-          if (session.user.email === 'javier.quinones.lopez@gmail.com') {
-            if (!updatedProfile || updatedProfile.role !== 'super_admin' || !updatedProfile.approved) {
-              const newProfile = {
-                uid: session.user.id,
-                email: session.user.email,
-                displayName: updatedProfile?.displayName || 'Super Admin',
-                role: 'super_admin',
-                approved: true,
-                createdAt: updatedProfile?.createdAt || Date.now()
-              };
-              await supabase.from('entrenadores').upsert(newProfile);
+          // Auto-repair profile if missing
+          if (!updatedProfile) {
+            const isSuperAdmin = session.user.email === 'javier.quinones.lopez@gmail.com';
+            const newProfile = {
+              uid: session.user.id,
+              email: session.user.email,
+              displayName: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Entrenador',
+              role: isSuperAdmin ? 'super_admin' : 'trainer',
+              approved: isSuperAdmin, // Solo Javier se auto-aprueba
+              createdAt: Date.now()
+            };
+            
+            const { error: upsertError } = await supabase.from('entrenadores').upsert(newProfile);
+            if (!upsertError) {
               updatedProfile = newProfile as UserProfile;
             }
+          } else if (session.user.email === 'javier.quinones.lopez@gmail.com' && (updatedProfile.role !== 'super_admin' || !updatedProfile.approved)) {
+            // Ensure Javier is always Super Admin and Approved
+            const fixedProfile = { ...updatedProfile, role: 'super_admin', approved: true };
+            await supabase.from('entrenadores').upsert(fixedProfile);
+            updatedProfile = fixedProfile as UserProfile;
           }
           
           if (updatedProfile) setProfile(updatedProfile);
