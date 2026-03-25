@@ -133,19 +133,18 @@ export default function App() {
     
     const timeout = setTimeout(() => {
       if (loading) {
-        console.warn('⚠️ PanelFit: La conexión con Supabase está tardando demasiado.');
-        setConnectionError('timeout');
+        console.warn('⚠️ PanelFit: La conexión con Supabase está tardando demasiado. Continuando de todos modos...');
+        // En lugar de bloquear con error, simplemente dejamos de cargar
+        // Si hay sesión, el perfil fallback se encargará más tarde
         setLoading(false);
         
         // Si hay una sesión guardada pero no carga, podría estar corrupta
         const sbSession = localStorage.getItem('panelfit-auth-token');
         if (sbSession) {
-          console.log('🧹 PanelFit: Detectada posible sesión corrupta, limpiando para el próximo intento...');
-          // No limpiamos todo, solo la sesión de auth para forzar re-login
-          localStorage.removeItem('panelfit-auth-token');
+          console.log('📦 PanelFit: Detectada sesión previa, intentando recuperar...');
         }
       }
-    }, 8000); // Reducido a 8s para una respuesta más rápida
+    }, 15000); // Aumentado a 15s para dar más margen
 
     const checkUser = async () => {
       console.log('🔍 PanelFit: Comprobando sesión inicial...');
@@ -221,7 +220,7 @@ export default function App() {
 
   // Auto-fallback si el perfil tarda demasiado en cargar (mientras el usuario está logueado)
   useEffect(() => {
-    if (user && !profile && !loading) {
+    if (user && !profile) {
       const profileTimeout = setTimeout(() => {
         if (!profile) {
           console.warn('⚠️ PanelFit: La sincronización de perfil está tardando demasiado. Aplicando perfil de emergencia.');
@@ -238,9 +237,9 @@ export default function App() {
       }, 5000); // 5 segundos de margen para el perfil
       return () => clearTimeout(profileTimeout);
     }
-  }, [user, profile, loading]);
+  }, [user, profile]);
 
-  if (loading || connectionError !== 'none') {
+  if (loading || connectionError === 'error') {
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center p-6">
         <div className="flex flex-col items-center gap-6 max-w-sm text-center">
@@ -254,51 +253,59 @@ export default function App() {
           
           <div className="space-y-2">
             <h2 className="text-sm font-bold uppercase tracking-widest">
-              {connectionError === 'none' ? 'Cargando PanelFit...' : 'Error de Conexión'}
+              {connectionError === 'none' ? 'Cargando PanelFit...' : 'Error Crítico de Conexión'}
             </h2>
             
             {connectionError !== 'none' && (
               <p className="text-[10px] text-muted leading-relaxed">
-                No hemos podido conectar con el servidor. Por favor, comprueba tu conexión a internet o intenta recargar la página.
+                No hemos podido establecer una conexión segura con el servidor. Esto puede deberse a un bloqueo de red o un problema con las credenciales de la base de datos.
               </p>
             )}
           </div>
           
           <div className="flex flex-col gap-3 w-full">
-            <button 
-              onClick={() => window.location.reload()}
-              className="px-6 py-4 bg-ink text-white rounded-full text-xs font-bold uppercase tracking-widest hover:opacity-90 transition-opacity shadow-lg"
-            >
-              Reintentar Conexión
-            </button>
-            <button 
-              onClick={clearAllData}
-              className="px-6 py-4 bg-warn/10 text-warn border-2 border-warn/30 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-warn/20 transition-colors"
-            >
-              ⚠️ Limpiar Datos y Reiniciar
-            </button>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => {
-                  setLoading(false);
-                  setConnectionError('none');
-                  setShowApp(true);
-                }}
-                className="flex-1 px-4 py-3 bg-bg-alt text-muted border border-border rounded-full text-[9px] font-bold uppercase tracking-widest hover:bg-bg-alt/80 transition-colors"
-              >
-                Saltar Login
-              </button>
-              <button 
-                onClick={() => {
-                  setLoading(false);
-                  setConnectionError('none');
-                  setIsDemo(true);
-                }}
-                className="flex-1 px-4 py-3 bg-bg-alt text-muted border border-border rounded-full text-[9px] font-bold uppercase tracking-widest hover:bg-bg-alt/80 transition-colors"
-              >
-                Modo Demo
-              </button>
-            </div>
+            {connectionError === 'error' ? (
+              <>
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="px-6 py-4 bg-ink text-white rounded-full text-xs font-bold uppercase tracking-widest hover:opacity-90 transition-opacity shadow-lg"
+                >
+                  Reintentar Conexión
+                </button>
+                <button 
+                  onClick={clearAllData}
+                  className="px-6 py-4 bg-warn/10 text-warn border-2 border-warn/30 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-warn/20 transition-colors"
+                >
+                  ⚠️ Limpiar Datos y Reiniciar
+                </button>
+              </>
+            ) : (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-3000 fill-mode-both">
+                <p className="text-[9px] text-muted mb-4 uppercase tracking-widest font-bold">¿Tarda demasiado?</p>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => {
+                      setLoading(false);
+                      setConnectionError('none');
+                      setShowApp(true);
+                    }}
+                    className="flex-1 px-4 py-3 bg-bg-alt text-muted border border-border rounded-full text-[9px] font-bold uppercase tracking-widest hover:bg-bg-alt/80 transition-colors"
+                  >
+                    Saltar Login
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setLoading(false);
+                      setConnectionError('none');
+                      setIsDemo(true);
+                    }}
+                    className="flex-1 px-4 py-3 bg-bg-alt text-muted border border-border rounded-full text-[9px] font-bold uppercase tracking-widest hover:bg-bg-alt/80 transition-colors"
+                  >
+                    Modo Demo
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
