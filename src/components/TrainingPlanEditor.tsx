@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Trash2, Video, Star, ChevronDown, ChevronUp, Save, Sparkles } from 'lucide-react';
 import { Button } from './Button';
 import { TrainingPlan, DayPlan, Exercise, WeekPlan } from '../types';
@@ -11,9 +11,32 @@ export function TrainingPlanEditor({
   plan: TrainingPlan, 
   onSave: (newPlan: TrainingPlan) => void 
 }) {
-  const [editedPlan, setEditedPlan] = useState<TrainingPlan>({ ...plan });
+  const [editedPlan, setEditedPlan] = useState<TrainingPlan>(() => {
+    if (!plan) return {
+      clientId: '',
+      weeks: [],
+      type: 'hipertrofia',
+      restMain: 180,
+      restAcc: 90,
+      restWarn: 30
+    };
+    return {
+      ...plan,
+      weeks: plan.weeks || []
+    };
+  });
   const [activeWeekIdx, setActiveWeekIdx] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Update editedPlan when plan prop changes
+  useEffect(() => {
+    if (plan) {
+      setEditedPlan({
+        ...plan,
+        weeks: plan.weeks || []
+      });
+    }
+  }, [plan]);
 
   const generateWithAI = async () => {
     setIsGenerating(true);
@@ -50,20 +73,23 @@ export function TrainingPlanEditor({
     const newWeek: WeekPlan = {
       label: `Semana ${editedPlan.weeks.length + 1}`,
       rpe: '@7',
-      isCurrent: false,
+      isCurrent: editedPlan.weeks.length === 0,
       days: []
     };
     setEditedPlan({ ...editedPlan, weeks: [...editedPlan.weeks, newWeek] });
+    setActiveWeekIdx(editedPlan.weeks.length);
   };
 
   const addDay = (weekIdx: number) => {
+    if (!editedPlan.weeks[weekIdx]) return;
+    
     const newDay: DayPlan = {
       title: `DÍA ${editedPlan.weeks[weekIdx].days.length + 1}`,
       focus: '',
       exercises: []
     };
     const newWeeks = [...editedPlan.weeks];
-    newWeeks[weekIdx].days.push(newDay);
+    newWeeks[weekIdx].days = [...newWeeks[weekIdx].days, newDay];
     setEditedPlan({ ...editedPlan, weeks: newWeeks });
   };
 

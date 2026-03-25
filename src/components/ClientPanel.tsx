@@ -130,7 +130,9 @@ export function ClientPanel({
 
       if (planData) {
         console.log('✅ PanelFit: Plan cargado correctamente');
-        setPlan(planData.plan as TrainingPlan);
+        // Check if plan is stored in a 'plan' column or spread in the row
+        const planObj = planData.plan ? (planData.plan as TrainingPlan) : (planData as unknown as TrainingPlan);
+        setPlan(planObj);
       } else if (isTrainer) {
         console.log('ℹ️ PanelFit: No hay plan, creando uno vacío para el entrenador');
         const emptyPlan: TrainingPlan = {
@@ -166,7 +168,9 @@ export function ClientPanel({
     const planChannel = supabase
       .channel(`public:planes:${client.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'planes', filter: `clientId=eq.${client.id}` }, payload => {
-        setPlan(payload.new as TrainingPlan);
+        const newPlan = payload.new as any;
+        const planObj = newPlan.plan ? (newPlan.plan as TrainingPlan) : (newPlan as TrainingPlan);
+        setPlan(planObj);
       })
       .subscribe();
 
@@ -189,9 +193,14 @@ export function ClientPanel({
       return;
     }
     try {
+      // Save the plan object directly to a 'plan' column for consistency with fetch
       const { error } = await supabase
         .from('planes')
-        .upsert({ ...newPlan, clientId: client.id });
+        .upsert({ 
+          clientId: client.id,
+          plan: newPlan,
+          updatedAt: new Date().toISOString()
+        });
       
       if (error) throw error;
       setPlan(newPlan);

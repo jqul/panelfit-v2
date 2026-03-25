@@ -51,8 +51,9 @@ export function ClientDashboard({
               <button 
                 className="bg-ink text-white px-8 py-3 rounded-lg font-bold text-sm hover:bg-ink/90 transition-all active:scale-95"
                 onClick={() => {
-                  const currentWeek = plan?.weeks.find(w => w.isCurrent) || plan?.weeks[0];
-                  if (currentWeek?.days[0]) onStartSession(currentWeek.days[0]);
+                  if (!plan || !plan.weeks || plan.weeks.length === 0) return;
+                  const currentWeek = plan.weeks.find(w => w.isCurrent) || plan.weeks[0];
+                  if (currentWeek?.days && currentWeek.days[0]) onStartSession(currentWeek.days[0]);
                 }}
               >
                 Empezar Sesión
