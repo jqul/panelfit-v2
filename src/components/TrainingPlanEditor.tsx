@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Video, Star, ChevronDown, ChevronUp, Save, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Video, Star, ChevronDown, ChevronUp, Save, Sparkles, ClipboardList } from 'lucide-react';
 import { Button } from './Button';
 import { TrainingPlan, DayPlan, Exercise, WeekPlan } from '../types';
 import { DEFAULT_EXERCISES, TRAINING_TYPES } from '../constants';
 
 export function TrainingPlanEditor({ 
   plan, 
-  onSave 
+  onSave,
+  isSaving = false
 }: { 
   plan: TrainingPlan, 
-  onSave: (newPlan: TrainingPlan) => void 
+  onSave: (newPlan: TrainingPlan) => void,
+  isSaving?: boolean
 }) {
   const [editedPlan, setEditedPlan] = useState<TrainingPlan>(() => {
     if (!plan) return {
@@ -88,8 +90,13 @@ export function TrainingPlanEditor({
       focus: '',
       exercises: []
     };
+    
     const newWeeks = [...editedPlan.weeks];
-    newWeeks[weekIdx].days = [...newWeeks[weekIdx].days, newDay];
+    newWeeks[weekIdx] = {
+      ...newWeeks[weekIdx],
+      days: [...newWeeks[weekIdx].days, newDay]
+    };
+    
     setEditedPlan({ ...editedPlan, weeks: newWeeks });
   };
 
@@ -101,8 +108,112 @@ export function TrainingPlanEditor({
       isMain: false,
       comment: ''
     };
-    const newWeeks = [...editedPlan.weeks];
-    newWeeks[weekIdx].days[dayIdx].exercises.push(newEx);
+    
+    const newWeeks = editedPlan.weeks.map((week, wIdx) => {
+      if (wIdx === weekIdx) {
+        return {
+          ...week,
+          days: week.days.map((day, dIdx) => {
+            if (dIdx === dayIdx) {
+              return {
+                ...day,
+                exercises: [...day.exercises, newEx]
+              };
+            }
+            return day;
+          })
+        };
+      }
+      return week;
+    });
+    
+    setEditedPlan({ ...editedPlan, weeks: newWeeks });
+  };
+
+  const removeWeek = (weekIdx: number) => {
+    const newWeeks = editedPlan.weeks.filter((_, i) => i !== weekIdx);
+    setEditedPlan({ ...editedPlan, weeks: newWeeks });
+    if (activeWeekIdx >= newWeeks.length) {
+      setActiveWeekIdx(Math.max(0, newWeeks.length - 1));
+    }
+  };
+
+  const removeDay = (weekIdx: number, dayIdx: number) => {
+    const newWeeks = editedPlan.weeks.map((week, wIdx) => {
+      if (wIdx === weekIdx) {
+        return {
+          ...week,
+          days: week.days.filter((_, dIdx) => dIdx !== dayIdx)
+        };
+      }
+      return week;
+    });
+    setEditedPlan({ ...editedPlan, weeks: newWeeks });
+  };
+
+  const removeExercise = (weekIdx: number, dayIdx: number, exIdx: number) => {
+    const newWeeks = editedPlan.weeks.map((week, wIdx) => {
+      if (wIdx === weekIdx) {
+        return {
+          ...week,
+          days: week.days.map((day, dIdx) => {
+            if (dIdx === dayIdx) {
+              return {
+                ...day,
+                exercises: day.exercises.filter((_, i) => i !== exIdx)
+              };
+            }
+            return day;
+          })
+        };
+      }
+      return week;
+    });
+    setEditedPlan({ ...editedPlan, weeks: newWeeks });
+  };
+
+  const updateWeek = (weekIdx: number, field: keyof WeekPlan, value: any) => {
+    const newWeeks = editedPlan.weeks.map((week, i) => 
+      i === weekIdx ? { ...week, [field]: value } : week
+    );
+    setEditedPlan({ ...editedPlan, weeks: newWeeks });
+  };
+
+  const updateDay = (weekIdx: number, dayIdx: number, field: keyof DayPlan, value: any) => {
+    const newWeeks = editedPlan.weeks.map((week, wIdx) => {
+      if (wIdx === weekIdx) {
+        return {
+          ...week,
+          days: week.days.map((day, dIdx) => 
+            dIdx === dayIdx ? { ...day, [field]: value } : day
+          )
+        };
+      }
+      return week;
+    });
+    setEditedPlan({ ...editedPlan, weeks: newWeeks });
+  };
+
+  const updateExercise = (weekIdx: number, dayIdx: number, exIdx: number, field: keyof Exercise, value: any) => {
+    const newWeeks = editedPlan.weeks.map((week, wIdx) => {
+      if (wIdx === weekIdx) {
+        return {
+          ...week,
+          days: week.days.map((day, dIdx) => {
+            if (dIdx === dayIdx) {
+              return {
+                ...day,
+                exercises: day.exercises.map((ex, i) => 
+                  i === exIdx ? { ...ex, [field]: value } : ex
+                )
+              };
+            }
+            return day;
+          })
+        };
+      }
+      return week;
+    });
     setEditedPlan({ ...editedPlan, weeks: newWeeks });
   };
 
@@ -165,17 +276,29 @@ export function TrainingPlanEditor({
       <div className="flex items-center justify-between border-b border-border pb-4 overflow-x-auto scrollbar-hide">
         <div className="flex items-center gap-4">
           {editedPlan.weeks.map((w, i) => (
-            <button
-              key={i}
-              onClick={() => setActiveWeekIdx(i)}
-              className={`px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
-                activeWeekIdx === i 
-                  ? 'bg-ink text-white' 
-                  : 'bg-card border border-border text-muted hover:border-muted'
-              }`}
-            >
-              {w.label}
-            </button>
+            <div key={i} className="relative group/week">
+              <button
+                onClick={() => setActiveWeekIdx(i)}
+                className={`px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
+                  activeWeekIdx === i 
+                    ? 'bg-ink text-white' 
+                    : 'bg-card border border-border text-muted hover:border-muted'
+                }`}
+              >
+                {w.label}
+              </button>
+              {editedPlan.weeks.length > 1 && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeWeek(i);
+                  }}
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-danger text-white rounded-full flex items-center justify-center opacity-0 group-hover/week:opacity-100 transition-opacity shadow-lg"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
+            </div>
           ))}
           <button 
             onClick={addWeek}
@@ -197,8 +320,50 @@ export function TrainingPlanEditor({
         </Button>
       </div>
 
-      {editedPlan.weeks[activeWeekIdx] && (
+      {editedPlan.weeks.length === 0 ? (
+        <div className="text-center py-20 bg-card border border-border rounded-2xl border-dashed">
+          <ClipboardList className="w-12 h-12 text-muted/20 mx-auto mb-4" />
+          <h3 className="text-lg font-serif font-bold">Plan Vacío</h3>
+          <p className="text-muted text-sm mt-1">Comienza añadiendo la primera semana de entrenamiento o genera una con IA.</p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6">
+            <Button onClick={addWeek} className="gap-2">
+              <Plus className="w-4 h-4" />
+              Añadir Primera Semana
+            </Button>
+            <Button 
+              variant="outline" 
+              className="gap-2 text-accent border-accent/20 hover:bg-accent/5"
+              onClick={generateWithAI}
+              disabled={isGenerating}
+            >
+              <Sparkles className={`w-4 h-4 ${isGenerating ? 'animate-pulse' : ''}`} />
+              Generar con IA
+            </Button>
+          </div>
+        </div>
+      ) : editedPlan.weeks[activeWeekIdx] && (
         <div className="space-y-6">
+          <div className="bg-card border border-border rounded-xl p-6 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-muted mb-2">Nombre de la Semana</label>
+                <input 
+                  className="w-full px-4 py-2 bg-bg border border-border rounded-lg text-sm font-bold" 
+                  value={editedPlan.weeks[activeWeekIdx].label}
+                  onChange={e => updateWeek(activeWeekIdx, 'label', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-muted mb-2">Intensidad (RPE/%MR)</label>
+                <input 
+                  className="w-full px-4 py-2 bg-bg border border-border rounded-lg text-sm" 
+                  value={editedPlan.weeks[activeWeekIdx].rpe}
+                  onChange={e => updateWeek(activeWeekIdx, 'rpe', e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
           {editedPlan.weeks[activeWeekIdx].days.map((day, dayIdx) => (
             <div key={dayIdx} className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
               <div className="p-4 bg-bg-alt/50 border-b border-border flex items-center justify-between gap-4">
@@ -206,30 +371,18 @@ export function TrainingPlanEditor({
                   <input 
                     className="bg-transparent font-serif font-bold text-lg outline-none focus:text-accent" 
                     value={day.title}
-                    onChange={e => {
-                      const newWeeks = [...editedPlan.weeks];
-                      newWeeks[activeWeekIdx].days[dayIdx].title = e.target.value;
-                      setEditedPlan({ ...editedPlan, weeks: newWeeks });
-                    }}
+                    onChange={e => updateDay(activeWeekIdx, dayIdx, 'title', e.target.value)}
                   />
                   <input 
                     className="bg-transparent text-sm text-muted outline-none focus:text-ink" 
                     placeholder="Foco (ej: Sentadilla pesada / Banca)"
                     value={day.focus}
-                    onChange={e => {
-                      const newWeeks = [...editedPlan.weeks];
-                      newWeeks[activeWeekIdx].days[dayIdx].focus = e.target.value;
-                      setEditedPlan({ ...editedPlan, weeks: newWeeks });
-                    }}
+                    onChange={e => updateDay(activeWeekIdx, dayIdx, 'focus', e.target.value)}
                   />
                 </div>
                 <button 
                   className="p-2 text-muted hover:text-warn transition-colors"
-                  onClick={() => {
-                    const newWeeks = [...editedPlan.weeks];
-                    newWeeks[activeWeekIdx].days.splice(dayIdx, 1);
-                    setEditedPlan({ ...editedPlan, weeks: newWeeks });
-                  }}
+                  onClick={() => removeDay(activeWeekIdx, dayIdx)}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -244,11 +397,7 @@ export function TrainingPlanEditor({
                         <input 
                           className="w-full bg-card border border-border rounded px-2 py-1.5 text-sm font-semibold" 
                           value={ex.name}
-                          onChange={e => {
-                            const newWeeks = [...editedPlan.weeks];
-                            newWeeks[activeWeekIdx].days[dayIdx].exercises[exIdx].name = e.target.value;
-                            setEditedPlan({ ...editedPlan, weeks: newWeeks });
-                          }}
+                          onChange={e => updateExercise(activeWeekIdx, dayIdx, exIdx, 'name', e.target.value)}
                           list={`exercises-${activeWeekIdx}-${dayIdx}-${exIdx}`}
                         />
                         <datalist id={`exercises-${activeWeekIdx}-${dayIdx}-${exIdx}`}>
@@ -260,11 +409,7 @@ export function TrainingPlanEditor({
                         <input 
                           className="w-full bg-card border border-border rounded px-2 py-1.5 text-sm" 
                           value={ex.sets}
-                          onChange={e => {
-                            const newWeeks = [...editedPlan.weeks];
-                            newWeeks[activeWeekIdx].days[dayIdx].exercises[exIdx].sets = e.target.value;
-                            setEditedPlan({ ...editedPlan, weeks: newWeeks });
-                          }}
+                          onChange={e => updateExercise(activeWeekIdx, dayIdx, exIdx, 'sets', e.target.value)}
                         />
                       </div>
                       <div className="lg:col-span-2">
@@ -272,11 +417,7 @@ export function TrainingPlanEditor({
                         <input 
                           className="w-full bg-card border border-border rounded px-2 py-1.5 text-sm" 
                           value={ex.weight}
-                          onChange={e => {
-                            const newWeeks = [...editedPlan.weeks];
-                            newWeeks[activeWeekIdx].days[dayIdx].exercises[exIdx].weight = e.target.value;
-                            setEditedPlan({ ...editedPlan, weeks: newWeeks });
-                          }}
+                          onChange={e => updateExercise(activeWeekIdx, dayIdx, exIdx, 'weight', e.target.value)}
                         />
                       </div>
                       <div className="lg:col-span-3">
@@ -285,21 +426,13 @@ export function TrainingPlanEditor({
                           className="w-full bg-card border border-border rounded px-2 py-1.5 text-xs italic" 
                           placeholder="Indicaciones..."
                           value={ex.comment}
-                          onChange={e => {
-                            const newWeeks = [...editedPlan.weeks];
-                            newWeeks[activeWeekIdx].days[dayIdx].exercises[exIdx].comment = e.target.value;
-                            setEditedPlan({ ...editedPlan, weeks: newWeeks });
-                          }}
+                          onChange={e => updateExercise(activeWeekIdx, dayIdx, exIdx, 'comment', e.target.value)}
                         />
                       </div>
                       <div className="lg:col-span-1 flex items-end justify-end h-full pt-5">
                         <button 
                           className="p-1.5 text-muted hover:text-warn opacity-0 group-hover:opacity-100 transition-all"
-                          onClick={() => {
-                            const newWeeks = [...editedPlan.weeks];
-                            newWeeks[activeWeekIdx].days[dayIdx].exercises.splice(exIdx, 1);
-                            setEditedPlan({ ...editedPlan, weeks: newWeeks });
-                          }}
+                          onClick={() => removeExercise(activeWeekIdx, dayIdx, exIdx)}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -327,9 +460,18 @@ export function TrainingPlanEditor({
       )}
 
       <div className="fixed bottom-6 right-6 z-40">
-        <Button size="lg" className="shadow-xl px-8 gap-2" onClick={() => onSave(editedPlan)}>
-          <Save className="w-5 h-5" />
-          Guardar Plan
+        <Button 
+          size="lg" 
+          className="shadow-xl px-8 gap-2 min-w-[180px]" 
+          onClick={() => onSave(editedPlan)}
+          disabled={isSaving}
+        >
+          {isSaving ? (
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Save className="w-5 h-5" />
+          )}
+          {isSaving ? 'Guardando...' : 'Guardar Plan'}
         </Button>
       </div>
     </div>

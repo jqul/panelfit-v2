@@ -45,6 +45,9 @@ export function ClientPanel({
   const [error, setError] = useState<string | null>(null);
   const [activeSession, setActiveSession] = useState<any>(null);
 
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [tableMissing, setTableMissing] = useState<{ planes: boolean, registros: boolean }>({ planes: false, registros: false });
+
   const fetchPlanAndLogs = async () => {
     setLoading(true);
     setError(null);
@@ -110,7 +113,8 @@ export function ClientPanel({
       if (planResult.error) {
         console.error('❌ PanelFit: Error en tabla "planes":', planResult.error);
         if (planResult.error.code === '42P01') {
-          console.warn('⚠️ PanelFit: La tabla "planes" no existe en la base de datos.');
+          console.warn('⚠️ PanelFit: La tabla "planes" no existe.');
+          setTableMissing(prev => ({ ...prev, planes: true }));
         } else {
           throw planResult.error;
         }
@@ -119,7 +123,8 @@ export function ClientPanel({
       if (logsResult.error) {
         console.error('❌ PanelFit: Error en tabla "registros":', logsResult.error);
         if (logsResult.error.code === '42P01') {
-          console.warn('⚠️ PanelFit: La tabla "registros" no existe en la base de datos.');
+          console.warn('⚠️ PanelFit: La tabla "registros" no existe.');
+          setTableMissing(prev => ({ ...prev, registros: true }));
         } else {
           throw logsResult.error;
         }
@@ -190,8 +195,12 @@ export function ClientPanel({
   const handleSavePlan = async (newPlan: TrainingPlan) => {
     if (client.id.startsWith('demo-client-')) {
       setPlan(newPlan);
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus('idle'), 3000);
       return;
     }
+    
+    setSaveStatus('saving');
     try {
       // Save the plan object directly to a 'plan' column for consistency with fetch
       const { error } = await supabase
@@ -200,12 +209,17 @@ export function ClientPanel({
           clientId: client.id,
           plan: newPlan,
           updatedAt: new Date().toISOString()
-        });
+        }, { onConflict: 'clientId' });
       
       if (error) throw error;
+      
       setPlan(newPlan);
-    } catch (error) {
-      console.error(error);
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    } catch (error: any) {
+      console.error('❌ PanelFit: Error guardando plan:', error);
+      setSaveStatus('error');
+      alert('Error al guardar el plan: ' + (error.message || 'Error desconocido'));
     }
   };
 
@@ -394,7 +408,30 @@ export function ClientPanel({
           {activeTab === 'habits' && <HabitsView clientId={client.id} isTrainer={isTrainer} />}
           {activeTab === 'progress' && <ProgressPhotos clientId={client.id} />}
           {activeTab === 'editor' && plan && (
-            <TrainingPlanEditor plan={plan} onSave={handleSavePlan} />
+            <div className="space-y-6">
+              {tableMissing.planes && (
+                <div className="p-4 bg-warn/10 border border-warn/30 rounded-xl text-warn text-sm flex items-center gap-3">
+                  <div className="w-2 h-2 bg-warn rounded-full animate-pulse" />
+                  <p>
+                    <span className="font-bold">Aviso:</span> La tabla <code className="bg-warn/20 px-1 rounded">planes</code> no existe en Supabase. 
+                    El plan no se guardará permanentemente.
+                  </p>
+                </div>
+              )}
+              {saveStatus === 'success' && (
+                <div className="fixed top-24 right-6 z-50 animate-in fade-in slide-in-from-right-4">
+                  <div className="bg-ok text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
+                    <CheckSquare className="w-5 h-5" />
+                    <span className="font-bold uppercase text-xs tracking-widest">Plan Guardado</span>
+                  </div>
+                </div>
+              )}
+              <TrainingPlanEditor 
+                plan={plan} 
+                onSave={handleSavePlan} 
+                isSaving={saveStatus === 'saving'} 
+              />
+            </div>
           )}
           {activeTab === 'settings' && <ClientSettings client={client} />}
         </div>
