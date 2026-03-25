@@ -5,7 +5,13 @@ import { Users, UserCheck, BarChart3, LogOut, Search, ShieldCheck, CheckCircle, 
 import { Button } from './Button';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
-export function SuperAdminDashboard({ userProfile }: { userProfile: UserProfile }) {
+export function SuperAdminDashboard({ 
+  userProfile,
+  onSelectClient
+}: { 
+  userProfile: UserProfile,
+  onSelectClient?: (client: ClientData) => void
+}) {
   console.log('👑 PanelFit: SuperAdminDashboard render');
   const [trainers, setTrainers] = useState<UserProfile[]>([]);
   const [clients, setClients] = useState<ClientData[]>([]);
@@ -399,13 +405,14 @@ export function SuperAdminDashboard({ userProfile }: { userProfile: UserProfile 
                     <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-muted">Entrenador</th>
                     <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-muted">Métricas</th>
                     <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-muted">Fecha Registro</th>
+                    <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-muted text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {loading ? (
                     [1, 2, 3].map(i => (
                       <tr key={i} className="animate-pulse">
-                        <td colSpan={4} className="px-6 py-8 h-16 bg-bg-alt/20" />
+                        <td colSpan={5} className="px-6 py-8 h-16 bg-bg-alt/20" />
                       </tr>
                     ))
                   ) : clients.length > 0 ? (
@@ -427,12 +434,22 @@ export function SuperAdminDashboard({ userProfile }: { userProfile: UserProfile 
                           <td className="px-6 py-4 text-sm text-muted">
                             {new Date(client.createdAt).toLocaleDateString()}
                           </td>
+                          <td className="px-6 py-4 text-right">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="text-[10px] uppercase tracking-widest"
+                              onClick={() => onSelectClient?.(client)}
+                            >
+                              Ver Plan
+                            </Button>
+                          </td>
                         </tr>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-muted italic">
+                      <td colSpan={5} className="px-6 py-12 text-center text-muted italic">
                         No hay clientes registrados en la plataforma
                       </td>
                     </tr>

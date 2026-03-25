@@ -39,12 +39,19 @@ export default function App() {
   const fetchAndRepairProfile = async (sessionUser: any) => {
     console.log('🔍 PanelFit: Sincronizando perfil para', sessionUser.email);
     try {
-      const { data: profileData } = await supabase
+      const { data: profileData, error: fetchError } = await supabase
         .from('entrenadores')
         .select('*')
         .eq('uid', sessionUser.id)
         .maybeSingle();
       
+      if (fetchError) {
+        console.error('❌ PanelFit: Error al buscar perfil:', fetchError);
+        setConnectionError('error');
+        return;
+      }
+      
+      setConnectionError('none');
       let updatedProfile = profileData as UserProfile;
       
       // Auto-repair profile if missing
@@ -76,7 +83,7 @@ export default function App() {
       }
       
       if (updatedProfile) {
-        console.log('👤 PanelFit: Perfil cargado:', updatedProfile.role);
+        console.log('👤 PanelFit: Perfil cargado:', updatedProfile.role, 'Aprobado:', updatedProfile.approved);
         setProfile(updatedProfile);
       }
     } catch (error) {
@@ -201,28 +208,48 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('🔔 PanelFit: Auth Event:', event, session?.user?.email);
       
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        if (session?.user) {
-          setUser(session.user);
-          await fetchAndRepairProfile(session.user);
-        }
+      if (session?.user) {
+        setUser(session.user);
+        // No quitamos el loading hasta que el perfil esté listo
+        await fetchAndRepairProfile(session.user);
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setProfile(null);
+        console.log('👋 PanelFit: Sesión cerrada');
       }
+      
+      setLoading(false);
     });
+
+    // Subscribe to profile changes (for real-time approval)
+    let profileSubscription: any = null;
+    if (user?.id) {
+      profileSubscription = supabase
+        .channel(`public:entrenadores:uid=eq.${user.id}`)
+        .on('postgres_changes', { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'entrenadores', 
+          filter: `uid=eq.${user.id}` 
+        }, payload => {
+          console.log('🔔 PanelFit: Perfil actualizado en tiempo real:', payload.new);
+          setProfile(payload.new as UserProfile);
+        })
+        .subscribe();
+    }
 
     return () => {
       subscription.unsubscribe();
+      if (profileSubscription) supabase.removeChannel(profileSubscription);
       clearTimeout(timeout);
     };
-  }, []);
+  }, [user?.id]);
 
   // Auto-fallback si el perfil tarda demasiado en cargar (mientras el usuario está logueado)
   useEffect(() => {
-    if (user && !profile) {
+    if (user && !profile && !loading) {
       const profileTimeout = setTimeout(() => {
-        if (!profile) {
+        if (!profile && !loading) {
           console.warn('⚠️ PanelFit: La sincronización de perfil está tardando demasiado. Aplicando perfil de emergencia.');
           const isSuperAdmin = user.email === 'javier.quinones.lopez@gmail.com';
           setProfile({
@@ -234,10 +261,10 @@ export default function App() {
             createdAt: Date.now()
           });
         }
-      }, 5000); // 5 segundos de margen para el perfil
+      }, 10000); // Aumentamos a 10s para dar más margen
       return () => clearTimeout(profileTimeout);
     }
-  }, [user, profile]);
+  }, [user, profile, loading]);
 
   if (loading || connectionError === 'error') {
     return (
@@ -421,9 +448,18 @@ export default function App() {
 
   return (
     <Layout>
-      {profile.role === 'super_admin' ? (
-        <SuperAdminDashboard userProfile={profile} />
-      ) : profile.role === 'trainer' && !profile.approved ? (
+      {selectedClient ? (
+        <ClientPanel 
+          client={selectedClient} 
+          isTrainer={profile?.role === 'trainer' || profile?.role === 'super_admin'} 
+          onBack={() => setSelectedClient(null)} 
+        />
+      ) : profile?.role === 'super_admin' ? (
+        <SuperAdminDashboard 
+          userProfile={profile} 
+          onSelectClient={(client) => setSelectedClient(client as any)} 
+        />
+      ) : profile?.role === 'trainer' && !profile.approved ? (
         <div className="min-h-screen bg-bg flex items-center justify-center p-6 text-center">
           <div className="max-w-md space-y-6 bg-card p-8 rounded-2xl border border-border shadow-sm">
             <div className="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -458,12 +494,6 @@ export default function App() {
             </div>
           </div>
         </div>
-      ) : selectedClient ? (
-        <ClientPanel 
-          client={selectedClient} 
-          isTrainer={profile?.role === 'trainer'} 
-          onBack={() => setSelectedClient(null)} 
-        />
       ) : (
         profile && (
           <TrainerDashboard 
