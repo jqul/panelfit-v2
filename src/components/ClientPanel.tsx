@@ -40,6 +40,7 @@ export function ClientPanel({
   const [activeTab, setActiveTab] = useState('dashboard');
   const [plan, setPlan] = useState<TrainingPlan | null>(null);
   const [logs, setLogs] = useState<TrainingLogs>({});
+  const [trainerLogo, setTrainerLogo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeSession, setActiveSession] = useState<any>(null);
@@ -89,6 +90,18 @@ export function ClientPanel({
       }
 
       console.log('🔍 PanelFit: Cargando plan y registros para:', client.id);
+      
+      // Fetch trainer logo
+      const { data: trainerData } = await supabase
+        .from('entrenadores')
+        .select('photoURL')
+        .eq('uid', client.trainerId)
+        .maybeSingle();
+      
+      if (trainerData?.photoURL) {
+        setTrainerLogo(trainerData.photoURL);
+      }
+
       const [planResult, logsResult] = await Promise.all([
         supabase.from('planes').select('*').eq('clientId', client.id).maybeSingle(),
         supabase.from('registros').select('*').eq('clientId', client.id).maybeSingle()
@@ -285,6 +298,11 @@ export function ClientPanel({
               <button onClick={onBack} className="p-2 hover:bg-bg-alt rounded-full transition-colors">
                 <ChevronLeft className="w-5 h-5" />
               </button>
+            )}
+            {trainerLogo && (
+              <div className="w-10 h-10 rounded-full overflow-hidden border border-border hidden sm:block">
+                <img src={trainerLogo} alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              </div>
             )}
             <div>
               <h1 className="text-xl font-serif font-bold uppercase tracking-tight">

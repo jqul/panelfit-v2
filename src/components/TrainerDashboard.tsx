@@ -91,7 +91,8 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
       
       if (error) throw error;
       
-      // The real-time subscription will handle updating the state
+      // Update local state immediately for better UX
+      setClients(prev => prev.filter(c => c.id !== clientId));
       setDeletingId(null);
     } catch (error: any) {
       console.error('❌ PanelFit: Error eliminando cliente:', error);
@@ -112,7 +113,7 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
           } else if (payload.eventType === 'UPDATE') {
             setClients(prev => prev.map(c => c.id === payload.new.id ? payload.new as ClientData : c));
           } else if (payload.eventType === 'DELETE') {
-            setClients(prev => prev.filter(c => c.id === payload.old.id));
+            setClients(prev => prev.filter(c => c.id !== payload.old.id));
           }
         })
         .subscribe();
@@ -225,8 +226,12 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
         
         <div className="p-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-bg-alt border border-border flex items-center justify-center font-serif text-accent">
-              {userProfile.displayName[0]}
+            <div className="w-10 h-10 rounded-full bg-bg-alt border border-border flex items-center justify-center font-serif text-accent overflow-hidden">
+              {userProfile.photoURL ? (
+                <img src={userProfile.photoURL} alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                userProfile.displayName[0]
+              )}
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold truncate">{userProfile.displayName}</p>

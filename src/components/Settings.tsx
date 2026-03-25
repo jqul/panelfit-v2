@@ -8,20 +8,42 @@ export function Settings({ userProfile }: { userProfile: UserProfile }) {
   const [notifications, setNotifications] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [displayName, setDisplayName] = useState(userProfile.displayName);
+  const [photoURL, setPhotoURL] = useState(userProfile.photoURL || '');
   const [loading, setLoading] = useState(false);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2000000) {
+        alert('La imagen es demasiado grande. Máximo 2MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoURL(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSave = async () => {
     setLoading(true);
     try {
       const { error } = await supabase
         .from('entrenadores')
-        .update({ name: displayName.split(' ')[0], surname: displayName.split(' ').slice(1).join(' ') })
-        .eq('id', userProfile.uid);
+        .update({ 
+          displayName: displayName,
+          photoURL: photoURL 
+        })
+        .eq('uid', userProfile.uid);
       
       if (error) throw error;
       setIsEditing(false);
+      // Recargar página para ver cambios en toda la app
+      window.location.reload();
     } catch (error) {
       console.error(error);
+      alert('Error al guardar los cambios');
     } finally {
       setLoading(false);
     }
@@ -30,24 +52,42 @@ export function Settings({ userProfile }: { userProfile: UserProfile }) {
   return (
     <div className="max-w-2xl mx-auto space-y-8 py-8">
       <div className="flex items-center gap-6 p-6 bg-card border border-border rounded-2xl shadow-sm">
-        <div className="w-20 h-20 rounded-full bg-accent/10 flex items-center justify-center text-accent text-3xl font-serif font-bold">
-          {displayName[0]}
+        <div className="relative group">
+          <div className="w-20 h-20 rounded-full bg-accent/10 flex items-center justify-center text-accent text-3xl font-serif font-bold overflow-hidden border border-border">
+            {photoURL ? (
+              <img src={photoURL} alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              displayName[0]
+            )}
+          </div>
+          {isEditing && (
+            <label className="absolute inset-0 flex items-center justify-center bg-ink/40 text-white rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
+              <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+              <Edit2 className="w-5 h-5" />
+            </label>
+          )}
         </div>
         <div className="flex-1">
           {isEditing ? (
-            <div className="flex gap-2">
-              <input 
-                type="text" 
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="flex-1 bg-bg border border-border rounded-lg px-3 py-1 text-xl font-serif font-bold outline-none focus:ring-2 focus:ring-accent/20"
-              />
-              <Button size="sm" onClick={handleSave} disabled={loading}>
-                <Save className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
-                <X className="w-4 h-4" />
-              </Button>
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="flex-1 bg-bg border border-border rounded-lg px-3 py-1 text-xl font-serif font-bold outline-none focus:ring-2 focus:ring-accent/20"
+                  placeholder="Nombre de la empresa o entrenador"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleSave} disabled={loading} className="gap-2">
+                  <Save className="w-4 h-4" />
+                  Guardar Cambios
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
+                  Cancelar
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="flex items-center justify-between">
