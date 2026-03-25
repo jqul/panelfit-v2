@@ -47,16 +47,21 @@ export default function App() {
       
       if (fetchError) {
         console.error('❌ PanelFit: Error al buscar perfil:', fetchError);
-        setConnectionError('error');
-        return;
+        // Si hay error de red o tabla, no bloqueamos todo el app, intentamos fallback
+        if (fetchError.code === '42P01') {
+          console.warn('⚠️ PanelFit: La tabla "entrenadores" no existe. Usando perfil temporal.');
+        } else {
+          // Para otros errores, mostramos advertencia pero no bloqueamos
+          console.warn('⚠️ PanelFit: Error de conexión con Supabase. Usando perfil temporal.');
+        }
       }
       
       setConnectionError('none');
       let updatedProfile = profileData as UserProfile;
       
-      // Auto-repair profile if missing
+      // Auto-repair profile if missing or if fetch failed
       if (!updatedProfile) {
-        console.log('🛠️ PanelFit: Perfil no encontrado, reparando...');
+        console.log('🛠️ PanelFit: Perfil no encontrado o inaccesible, generando perfil temporal...');
         const isSuperAdmin = sessionUser.email === 'javier.quinones.lopez@gmail.com';
         const newProfile = {
           uid: sessionUser.id,
@@ -67,27 +72,47 @@ export default function App() {
           createdAt: Date.now()
         };
         
-        const { error: upsertError } = await supabase.from('entrenadores').upsert(newProfile);
-        if (!upsertError) {
-          console.log('✅ PanelFit: Perfil reparado con éxito.');
-          updatedProfile = newProfile as UserProfile;
-        } else {
-          console.error('❌ PanelFit: Error al reparar perfil:', upsertError);
+        // Intentamos guardar si es posible, si no, al menos lo tenemos en memoria
+        try {
+          const { error: upsertError } = await supabase.from('entrenadores').upsert(newProfile);
+          if (upsertError) {
+            console.warn('⚠️ PanelFit: No se pudo guardar el perfil en la BD (posible falta de tabla o RLS):', upsertError.message);
+          } else {
+            console.log('✅ PanelFit: Perfil guardado/reparado en la BD.');
+          }
+        } catch (e) {
+          console.warn('⚠️ PanelFit: Error al intentar upsert de perfil:', e);
         }
+        
+        updatedProfile = newProfile as UserProfile;
       } else if (sessionUser.email === 'javier.quinones.lopez@gmail.com' && (updatedProfile.role !== 'super_admin' || !updatedProfile.approved)) {
         console.log('🛠️ PanelFit: Corrigiendo permisos de Super Admin...');
         const fixedProfile = { ...updatedProfile, role: 'super_admin', approved: true };
-        await supabase.from('entrenadores').upsert(fixedProfile);
-        updatedProfile = fixedProfile as UserProfile;
-        console.log('✅ PanelFit: Permisos corregidos.');
+        try {
+          await supabase.from('entrenadores').upsert(fixedProfile);
+          updatedProfile = fixedProfile as UserProfile;
+          console.log('✅ PanelFit: Permisos corregidos.');
+        } catch (e) {
+          console.warn('⚠️ PanelFit: No se pudo actualizar permisos en BD.');
+        }
       }
       
       if (updatedProfile) {
-        console.log('👤 PanelFit: Perfil cargado:', updatedProfile.role, 'Aprobado:', updatedProfile.approved);
+        console.log('👤 PanelFit: Perfil listo:', updatedProfile.role, 'Aprobado:', updatedProfile.approved);
         setProfile(updatedProfile);
       }
     } catch (error) {
       console.error('❌ PanelFit: Error crítico en sincronización:', error);
+      // Fallback de último recurso
+      const isSuperAdmin = sessionUser.email === 'javier.quinones.lopez@gmail.com';
+      setProfile({
+        uid: sessionUser.id,
+        email: sessionUser.email,
+        displayName: sessionUser.email?.split('@')[0] || 'Entrenador',
+        role: isSuperAdmin ? 'super_admin' : 'trainer',
+        approved: isSuperAdmin,
+        createdAt: Date.now()
+      });
     }
   };
 
@@ -125,33 +150,12 @@ export default function App() {
     return () => window.removeEventListener('error', handleError);
   }, []);
 
+  // 1. Inicialización de Auth y Listener (Solo una vez)
   useEffect(() => {
     console.log('🚀 PanelFit: Iniciando aplicación...');
     
-    // Log de datos locales para depuración
-    const sbSession = localStorage.getItem('panelfit-auth-token');
-    console.log('📦 PanelFit: Datos locales encontrados:', {
-      hasSbSession: !!sbSession,
-      localStorageKeys: Object.keys(localStorage),
-    });
-
     const params = new URLSearchParams(window.location.search);
     const token = params.get('c');
-    
-    const timeout = setTimeout(() => {
-      if (loading) {
-        console.warn('⚠️ PanelFit: La conexión con Supabase está tardando demasiado. Continuando de todos modos...');
-        // En lugar de bloquear con error, simplemente dejamos de cargar
-        // Si hay sesión, el perfil fallback se encargará más tarde
-        setLoading(false);
-        
-        // Si hay una sesión guardada pero no carga, podría estar corrupta
-        const sbSession = localStorage.getItem('panelfit-auth-token');
-        if (sbSession) {
-          console.log('📦 PanelFit: Detectada sesión previa, intentando recuperar...');
-        }
-      }
-    }, 15000); // Aumentado a 15s para dar más margen
 
     const checkUser = async () => {
       console.log('🔍 PanelFit: Comprobando sesión inicial...');
@@ -161,16 +165,13 @@ export default function App() {
         if (session?.user) {
           console.log('✅ PanelFit: Sesión encontrada:', session.user.email);
           setUser(session.user);
-          await fetchAndRepairProfile(session.user);
         } else {
           console.log('ℹ️ PanelFit: No hay sesión activa.');
         }
       } catch (error: any) {
         console.error('❌ PanelFit: Error comprobando sesión:', error);
-        setConnectionError('error');
       } finally {
         setLoading(false);
-        clearTimeout(timeout);
       }
     };
 
@@ -189,7 +190,6 @@ export default function App() {
             setSelectedClient(data as ClientData);
           } else {
             console.warn('⚠️ PanelFit: Token inválido o cliente no encontrado.');
-            // Si el token falla, intentamos cargar la sesión normal
             checkUser();
           }
         } catch (e) {
@@ -197,7 +197,6 @@ export default function App() {
           checkUser();
         } finally {
           setLoading(false);
-          clearTimeout(timeout);
         }
       };
       fetchClientByToken();
@@ -210,8 +209,6 @@ export default function App() {
       
       if (session?.user) {
         setUser(session.user);
-        // No quitamos el loading hasta que el perfil esté listo
-        await fetchAndRepairProfile(session.user);
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setProfile(null);
@@ -221,27 +218,44 @@ export default function App() {
       setLoading(false);
     });
 
-    // Subscribe to profile changes (for real-time approval)
-    let profileSubscription: any = null;
-    if (user?.id) {
-      profileSubscription = supabase
-        .channel(`public:entrenadores:uid=eq.${user.id}`)
-        .on('postgres_changes', { 
-          event: 'UPDATE', 
-          schema: 'public', 
-          table: 'entrenadores', 
-          filter: `uid=eq.${user.id}` 
-        }, payload => {
-          console.log('🔔 PanelFit: Perfil actualizado en tiempo real:', payload.new);
-          setProfile(payload.new as UserProfile);
-        })
-        .subscribe();
-    }
-
     return () => {
       subscription.unsubscribe();
-      if (profileSubscription) supabase.removeChannel(profileSubscription);
-      clearTimeout(timeout);
+    };
+  }, []);
+
+  // 2. Sincronización de Perfil (Cuando cambia el usuario)
+  useEffect(() => {
+    if (!user) return;
+
+    const syncProfile = async () => {
+      try {
+        setLoading(true);
+        await fetchAndRepairProfile(user);
+      } catch (e) {
+        console.error('❌ Error in syncProfile:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    syncProfile();
+
+    // Suscripción a cambios en el perfil
+    const profileSubscription = supabase
+      .channel(`public:entrenadores:uid=eq.${user.id}`)
+      .on('postgres_changes', { 
+        event: 'UPDATE', 
+        schema: 'public', 
+        table: 'entrenadores', 
+        filter: `uid=eq.${user.id}` 
+      }, payload => {
+        console.log('🔔 PanelFit: Perfil actualizado en tiempo real:', payload.new);
+        setProfile(payload.new as UserProfile);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(profileSubscription);
     };
   }, [user?.id]);
 
