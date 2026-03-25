@@ -204,11 +204,14 @@ export default function App() {
       checkUser();
     }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('🔔 PanelFit: Auth Event:', event, session?.user?.email);
       
       if (session?.user) {
-        setUser(session.user);
+        setUser(prevUser => {
+          if (prevUser?.id === session.user.id) return prevUser;
+          return session.user;
+        });
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setProfile(null);
@@ -225,17 +228,11 @@ export default function App() {
 
   // 2. Sincronización de Perfil (Cuando cambia el usuario)
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
 
     const syncProfile = async () => {
-      try {
-        setLoading(true);
-        await fetchAndRepairProfile(user);
-      } catch (e) {
-        console.error('❌ Error in syncProfile:', e);
-      } finally {
-        setLoading(false);
-      }
+      console.log('🔄 PanelFit: Iniciando sincronización de perfil...');
+      await fetchAndRepairProfile(user);
     };
 
     syncProfile();
@@ -513,6 +510,7 @@ export default function App() {
           <TrainerDashboard 
             userProfile={profile} 
             onLogout={() => supabase.auth.signOut()} 
+            onSelectClient={(client) => setSelectedClient(client as any)}
           />
         )
       )}

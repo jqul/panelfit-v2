@@ -9,7 +9,15 @@ import { ClientPanel } from './ClientPanel';
 import { TrainingTemplates } from './TrainingTemplates';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
-export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserProfile, onLogout: () => void }) {
+export function TrainerDashboard({ 
+  userProfile, 
+  onLogout, 
+  onSelectClient 
+}: { 
+  userProfile: UserProfile, 
+  onLogout: () => void,
+  onSelectClient?: (client: ClientData) => void
+}) {
   console.log('🏋️ PanelFit: TrainerDashboard render');
   const [clients, setClients] = useState<ClientData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,7 +25,6 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newClient, setNewClient] = useState({ name: '', surname: '' });
-  const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'exercises' | 'templates' | 'settings'>('dashboard');
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -124,15 +131,7 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
     }
   }, [userProfile.uid]);
 
-  if (selectedClient) {
-    return (
-      <ClientPanel 
-        client={selectedClient} 
-        isTrainer={true} 
-        onBack={() => setSelectedClient(null)} 
-      />
-    );
-  }
+  // Remove local selectedClient rendering logic as it's now handled by App.tsx
 
   const handleAddClient = async () => {
     if (!newClient.name) return;
@@ -409,7 +408,7 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
                         <div 
                           key={c.id} 
                           className="p-4 hover:bg-bg-alt transition-colors cursor-pointer flex items-center justify-between group"
-                          onClick={() => setSelectedClient(c)}
+                          onClick={() => onSelectClient?.(c)}
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-accent/10 text-accent flex items-center justify-center font-bold text-xs">
@@ -489,7 +488,7 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
                     <div 
                       key={client.id}
                       className="group bg-card border border-border rounded-xl p-5 hover:border-accent hover:shadow-md transition-all cursor-pointer relative"
-                      onClick={() => setSelectedClient(client)}
+                      onClick={() => onSelectClient?.(client)}
                     >
                       <div className="flex items-center gap-4 mb-4">
                         <div className="w-12 h-12 rounded-full bg-bg-alt border border-border flex items-center justify-center font-serif text-lg text-accent group-hover:bg-accent group-hover:text-white transition-colors">
@@ -522,7 +521,7 @@ export function TrainerDashboard({ userProfile, onLogout }: { userProfile: UserP
                           </div>
                         ) : (
                           <>
-                            <Button variant="outline" size="sm" className="flex-1 text-[10px] uppercase tracking-wider" onClick={(e) => { e.stopPropagation(); setSelectedClient(client); }}>Plan</Button>
+                            <Button variant="outline" size="sm" className="flex-1 text-[10px] uppercase tracking-wider" onClick={(e) => { e.stopPropagation(); onSelectClient?.(client); }}>Plan</Button>
                             <Button 
                               variant="outline" 
                               size="sm" 
